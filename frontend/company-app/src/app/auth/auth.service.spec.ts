@@ -82,6 +82,43 @@ describe('AuthService', () => {
     expect(auth.username()).toBe('restored');
   });
 
+  it('authRequired_BeforeLoadConfig_IsTrue', () => {
+    expect(create().authRequired()).toBe(true);
+  });
+
+  it('loadConfig_ServerSaysDisabled_OpensAppWithoutSignIn', async () => {
+    const auth = create();
+
+    const done = auth.loadConfig();
+    http.expectOne(`${baseUrl}/auth/config`).flush({ enabled: false });
+    await done;
+
+    expect(auth.authRequired()).toBe(false);
+    expect(auth.isAuthenticated()).toBe(false);
+    expect(auth.canAccessApp()).toBe(true);
+  });
+
+  it('loadConfig_ServerSaysEnabled_RequiresSignIn', async () => {
+    const auth = create();
+
+    const done = auth.loadConfig();
+    http.expectOne(`${baseUrl}/auth/config`).flush({ enabled: true });
+    await done;
+
+    expect(auth.authRequired()).toBe(true);
+    expect(auth.canAccessApp()).toBe(false);
+  });
+
+  it('loadConfig_ServerUnreachable_KeepsAuthRequiredWithoutThrowing', async () => {
+    const auth = create();
+
+    const done = auth.loadConfig();
+    http.expectOne(`${baseUrl}/auth/config`).error(new ProgressEvent('error'), { status: 0 });
+
+    await expect(done).resolves.toBeUndefined();
+    expect(auth.authRequired()).toBe(true);
+  });
+
   it('constructor_CorruptStorage_StartsSignedOut', () => {
     sessionStorage.setItem(SESSION_STORAGE_KEY, '{not json');
 

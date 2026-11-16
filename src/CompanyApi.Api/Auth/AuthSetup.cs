@@ -1,7 +1,9 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Cryptography;
 using System.Threading.RateLimiting;
 using CompanyApi.Api.Contracts;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
@@ -10,6 +12,7 @@ namespace CompanyApi.Api.Auth;
 public static class AuthSetup
 {
     public const string LoginRateLimitPolicy = "login";
+    public const string AuthenticatedUserPolicy = "authenticated-user";
     public const string AuthenticationRequiredMessage = "Authentication is required. Sign in and send the token as 'Authorization: Bearer {token}'.";
     public const string TooManyAttemptsMessage = "Too many sign-in attempts. Please wait a minute and try again.";
 
@@ -18,6 +21,9 @@ public static class AuthSetup
         services.AddOptions<AuthOptions>()
             .Bind(configuration.GetSection(AuthOptions.SectionName))
             .ValidateDataAnnotations()
+            .Validate(o => !o.Enabled || o.HasValidSigningKey,
+                $"Auth:SigningKey must be at least {AuthOptions.MinSigningKeyLength} characters when Auth:Enabled is true. " +
+                "Set it with user secrets or the Auth__SigningKey environment variable.")
             .ValidateOnStart();
 
         services.AddSingleton<IAuthService, AuthService>();
@@ -37,7 +43,10 @@ public static class AuthSetup
                     ValidateAudience = true,
                     ValidAudience = o.Audience,
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = AuthService.CreateSigningKey(o.SigningKey),
+                    // With auth disabled there may be no key; a random one keeps the handler valid (no token can match it).
+                    IssuerSigningKey = o.HasValidSigningKey
+                        ? AuthService.CreateSigningKey(o.SigningKey)
+                        : new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(32)),
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromSeconds(30),
                     NameClaimType = JwtRegisteredClaimNames.UniqueName,
@@ -54,7 +63,19 @@ public static class AuthSetup
                 };
             });
 
-        services.AddAuthorization();
+        // Endpoints that are about "who am I" always need a real user, whatever Auth:Enabled says.
+        services.AddAuthorization(o => o.AddPolicy(AuthenticatedUserPolicy, p => p.RequireAuthenticatedUser()));
+
+        // Auth:Enabled = false: [Authorize] endpoints accept anonymous callers (the attributes stay in place,
+        // so turning authentication on is purely a configuration change).
+        services.AddOptions<AuthorizationOptions>()
+            .Configure<IOptions<AuthOptions>>((authorization, auth) =>
+            {
+                if (!auth.Value.Enabled)
+                {
+                    authorization.DefaultPolicy = new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build();
+                }
+            });
 
         services.AddRateLimiter(o =>
         {

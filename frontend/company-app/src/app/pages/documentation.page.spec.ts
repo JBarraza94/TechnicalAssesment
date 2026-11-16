@@ -28,6 +28,7 @@ describe('DocumentationPage', () => {
     const cards = Array.from(root.querySelectorAll('.endpoint'));
     const titles = cards.map((c) => `${c.querySelector('h3 .badge')?.textContent} ${c.querySelector('h3 code')?.textContent}`);
     expect(titles).toEqual([
+      'GET /api/auth/config',
       'POST /api/auth/login',
       'GET /api/auth/me',
       'POST /api/companies',
@@ -35,17 +36,20 @@ describe('DocumentationPage', () => {
       'GET /api/companies/{id}',
     ]);
 
-    const getById = cards[4].textContent ?? '';
-    expect(getById).toContain('curl -H "Authorization: Bearer $TOKEN" http://localhost:5000/api/companies/');
+    const getById = cards[5].textContent ?? '';
+    expect(getById).toContain('curl http://localhost:5000/api/companies/');
     expect(getById).toContain('401 Unauthorized');
+    expect(getById).toContain('Only when authentication is enabled');
     expect(getById).toContain('200 OK');
     expect(getById).toContain('404 Not Found');
     expect(getById).toContain('400 Bad Request');
   });
 
-  it('authNote_Rendered_ExplainsBearerToken', () => {
-    expect(text('[data-testid="docs-auth-note"]')).toContain('Authorization: Bearer');
-    expect(text('.endpoint')).toContain('Invalid username or password.');
+  it('authNote_Rendered_ExplainsOptionalBearerToken', () => {
+    const note = text('[data-testid="docs-auth-note"]');
+    expect(note).toContain('off by default');
+    expect(note).toContain('Authorization: Bearer');
+    expect(text('[data-testid="docs-endpoints"]')).toContain('Invalid username or password.');
   });
 
   it('payloads_Rendered_ShowsCreateRequestJson', () => {

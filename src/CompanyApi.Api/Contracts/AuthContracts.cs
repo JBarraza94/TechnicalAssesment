@@ -23,6 +23,10 @@ public sealed record LoginRequest
 /// <param name="Username">The signed-in user.</param>
 public sealed record LoginResponse(string AccessToken, string TokenType, DateTimeOffset ExpiresAt, string Username);
 
+/// <summary>Whether the API requires authentication.</summary>
+/// <param name="Enabled">True when the company endpoints require a bearer token.</param>
+public sealed record AuthConfigResponse(bool Enabled);
+
 /// <summary>The current user.</summary>
 /// <param name="Username">Name from the token.</param>
 public sealed record CurrentUserResponse(string Username);

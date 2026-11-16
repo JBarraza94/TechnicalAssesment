@@ -57,6 +57,19 @@ describe('App', () => {
     expect(root.querySelector('[data-testid="user"]')?.textContent).toContain('admin');
   });
 
+  it('sidebar_AuthDisabledOnServer_ShowsPagesWithoutSignInOrLogout', async () => {
+    TestBed.inject(AuthService).authRequired.set(false);
+
+    const { root } = await render();
+
+    expect(linkTexts(root)).toEqual([
+      ['Add company', '/add'],
+      ['Search companies', '/search'],
+      ['Documentation', '/docs'],
+    ]);
+    expect(root.querySelector('[data-testid="user"]')).toBeNull();
+  });
+
   it('logout_Clicked_ClearsSessionAndGoesToLogin', async () => {
     signIn();
     const { fixture, root } = await render();

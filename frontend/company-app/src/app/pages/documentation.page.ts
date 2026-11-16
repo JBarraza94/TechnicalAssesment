@@ -47,11 +47,12 @@ interface RelevanceExample {
 const json = (value: unknown) => JSON.stringify(value, null, 2);
 
 const AUTH_REQUIRED = "Authentication is required. Sign in and send the token as 'Authorization: Bearer {token}'.";
+const AUTH_DISABLED = 'Authentication is disabled on this server (Auth:Enabled = false).';
 const TOO_MANY_ATTEMPTS = 'Too many sign-in attempts. Please wait a minute and try again.';
 
 const UNAUTHORIZED: EndpointResponse = {
   status: '401 Unauthorized',
-  when: 'No token, or the token is invalid or expired.',
+  when: 'Only when authentication is enabled: no token, or the token is invalid or expired.',
   body: json({ message: AUTH_REQUIRED, errors: [AUTH_REQUIRED] }),
 };
 
@@ -77,9 +78,11 @@ const UNAUTHORIZED: EndpointResponse = {
       <h2>Endpoints</h2>
       <p>Base URL: <code>{{ baseUrl }}</code></p>
       <p class="alert info" data-testid="docs-auth-note">
-        Every <code>/api/companies</code> endpoint requires a bearer token. Get one from
-        <code>POST /api/auth/login</code> and send it as <code>Authorization: Bearer &lt;token&gt;</code>.
-        A missing, invalid or expired token gets <code>401</code>.
+        Authentication is <strong>off by default</strong> (<code>Auth:Enabled = false</code>), so the company
+        endpoints can be called directly with curl or Postman. When it is enabled, every <code>/api/companies</code>
+        endpoint requires a bearer token: get one from <code>POST /api/auth/login</code> and send it as
+        <code>Authorization: Bearer &lt;token&gt;</code>; a missing, invalid or expired token gets <code>401</code>.
+        <code>GET /api/auth/config</code> tells clients which mode the server is in.
       </p>
       <div class="table-wrap">
         <table>
@@ -197,7 +200,7 @@ const UNAUTHORIZED: EndpointResponse = {
         <li>Empty body or invalid JSON → <code>400</code> <code>The request body is empty or is not valid JSON.</code></li>
         <li><code>{{ '{id}' }}</code> that is not a GUID → <code>400</code>; a valid GUID that does not exist → <code>404</code>.</li>
         <li><code>pageSize</code> outside 1–100 or <code>page</code> &lt; 1 → <code>400</code>.</li>
-        <li>Missing, invalid or expired bearer token → <code>401</code>.</li>
+        <li>Authentication enabled and the bearer token is missing, invalid or expired → <code>401</code>.</li>
         <li>Unexpected server failure → <code>500</code> with a generic message (details are only logged).</li>
       </ul>
     </section>
@@ -274,6 +277,15 @@ export class DocumentationPage {
 
   protected readonly endpoints: Endpoint[] = [
     {
+      method: 'GET',
+      route: '/api/auth/config',
+      purpose: 'Tell clients whether the company endpoints require a bearer token (public)',
+      success: '200',
+      errors: '—',
+      curl: `curl ${this.baseUrl}/auth/config`,
+      responses: [{ status: '200 OK', when: 'Always. "enabled" mirrors Auth:Enabled.', body: json({ enabled: false }) }],
+    },
+    {
       method: 'POST',
       route: '/api/auth/login',
       purpose: 'Sign in and get a bearer token (public; at most 10 attempts per minute)',
@@ -304,6 +316,11 @@ export class DocumentationPage {
           body: json({ message: 'Invalid username or password.', errors: ['Invalid username or password.'] }),
         },
         {
+          status: '404 Not Found',
+          when: 'Authentication is disabled on this server (Auth:Enabled = false).',
+          body: json({ message: AUTH_DISABLED, errors: [AUTH_DISABLED] }),
+        },
+        {
           status: '429 Too Many Requests',
           when: 'More than 10 sign-in attempts in a minute from the same address.',
           body: json({ message: TOO_MANY_ATTEMPTS, errors: [TOO_MANY_ATTEMPTS] }),
@@ -327,7 +344,6 @@ export class DocumentationPage {
       errors: '400 validation / relevance / malformed body',
       curl: [
         `curl -i -X POST ${this.baseUrl}/companies \\`,
-        `  -H "Authorization: Bearer $TOKEN" \\`,
         `  -H "Content-Type: application/json" \\`,
         `  -d '${JSON.stringify({ name: 'MyCompany', website: 'https://www.mycompany.com' })}'`,
       ].join('\n'),
@@ -365,11 +381,11 @@ export class DocumentationPage {
       success: '200 (empty array if none)',
       errors: '400 invalid query',
       curl: [
-        `curl -H "Authorization: Bearer $TOKEN" ${this.baseUrl}/companies`,
-        `curl -H "Authorization: Bearer $TOKEN" "${this.baseUrl}/companies?name=comp"`,
-        `curl -H "Authorization: Bearer $TOKEN" "${this.baseUrl}/companies?domain=mycompany.com"`,
-        `curl -H "Authorization: Bearer $TOKEN" "${this.baseUrl}/companies?q=acme"`,
-        `curl -H "Authorization: Bearer $TOKEN" "${this.baseUrl}/companies?page=1&pageSize=10"`,
+        `curl ${this.baseUrl}/companies`,
+        `curl "${this.baseUrl}/companies?name=comp"`,
+        `curl "${this.baseUrl}/companies?domain=mycompany.com"`,
+        `curl "${this.baseUrl}/companies?q=acme"`,
+        `curl "${this.baseUrl}/companies?page=1&pageSize=10"`,
       ].join('\n'),
       responses: [
         {
@@ -392,7 +408,7 @@ export class DocumentationPage {
       purpose: 'Get one company by its GUID',
       success: '200',
       errors: '400 id is not a GUID, 404 not found',
-      curl: `curl -H "Authorization: Bearer $TOKEN" ${this.baseUrl}/companies/5f8aa2db-5162-482b-a0ad-19b3f5d98456`,
+      curl: `curl ${this.baseUrl}/companies/5f8aa2db-5162-482b-a0ad-19b3f5d98456`,
       responses: [
         {
           status: '200 OK',

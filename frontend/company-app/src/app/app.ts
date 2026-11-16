@@ -28,17 +28,17 @@ import { AuthService } from './auth/auth.service';
       <aside id="sidebar" class="sidebar" [class.open]="menuOpen()">
         <div class="brand sidebar-brand">Company Directory</div>
         <nav aria-label="Main">
-          @if (auth.isAuthenticated()) {
+          @if (auth.canAccessApp()) {
             <a routerLink="/add" routerLinkActive="active" ariaCurrentWhenActive="page">Add company</a>
             <a routerLink="/search" routerLinkActive="active" ariaCurrentWhenActive="page">Search companies</a>
           }
           <a routerLink="/docs" routerLinkActive="active" ariaCurrentWhenActive="page">Documentation</a>
-          @if (!auth.isAuthenticated()) {
+          @if (!auth.canAccessApp()) {
             <a routerLink="/login" routerLinkActive="active" ariaCurrentWhenActive="page">Sign in</a>
           }
         </nav>
 
-        @if (auth.isAuthenticated()) {
+        @if (auth.authRequired() && auth.isAuthenticated()) {
           <div class="user" data-testid="user">
             <span>Signed in as <strong>{{ auth.username() }}</strong></span>
             <button type="button" class="button ghost" (click)="logout()">Log out</button>

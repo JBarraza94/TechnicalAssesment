@@ -24,6 +24,12 @@ public sealed class AuthApiTests : IDisposable
         _client.PostAsJsonAsync("/api/auth/login", new LoginRequest { Username = username, Password = password });
 
     [Fact]
+    public async Task Config_AuthEnabled_ReportsEnabled()
+    {
+        (await _client.GetFromJsonAsync<AuthConfigResponse>("/api/auth/config"))!.Enabled.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Login_ValidCredentials_Returns200WithBearerToken()
     {
         var response = await LoginAsync(ApiFactory.Username, ApiFactory.Password);

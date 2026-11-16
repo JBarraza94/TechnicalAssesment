@@ -100,6 +100,20 @@ describe('auth guards', () => {
     expect(TestBed.inject(Router).serializeUrl(runGuard(guestGuard) as never)).toBe('/add');
   });
 
+  it('authGuard_AuthDisabledOnServer_AllowsWithoutSignIn', () => {
+    setup();
+    TestBed.inject(AuthService).authRequired.set(false);
+
+    expect(runGuard(authGuard)).toBe(true);
+  });
+
+  it('guestGuard_AuthDisabledOnServer_RedirectsLoginToAdd', () => {
+    setup();
+    TestBed.inject(AuthService).authRequired.set(false);
+
+    expect(TestBed.inject(Router).serializeUrl(runGuard(guestGuard) as never)).toBe('/add');
+  });
+
   it('guestGuard_SignedOut_AllowsLoginPage', () => {
     setup();
 

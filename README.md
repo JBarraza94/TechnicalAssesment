@@ -1,68 +1,88 @@
 # Company API (.NET 10) + Angular frontend
 
-A small REST API that stores companies (name + website) through EF Core, using its in-memory provider. It accepts a company only when its name is *relevant* to its website, using an explainable relevance model. An Angular app lets you create companies, list them and search them.
+A small REST API that stores companies (name + website) in memory. It accepts a company only when its name is *relevant* to its website, using an explainable relevance model. An Angular app lets you create companies, list them and search them.
+
+## Quick start
+
+> **Requires the .NET 10 SDK and Node.js 22** (Angular 22 needs Node ≥ 20.19).
+> Downloads: [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) · [Node.js 22 LTS](https://nodejs.org/en/download). Check with `dotnet --version` and `node --version`.
+
+```bash
+# 1. Backend: http://localhost:5000 and https://localhost:7000
+cd src/CompanyApi.Api
+dotnet run                       # or, from the repo root: dotnet run --project src/CompanyApi.Api
+
+# 2. Frontend: http://localhost:4200 (in a second terminal)
+cd frontend/company-app
+npm install
+npx ng serve
+
+# 3. Try the API (no token needed by default)
+curl -i -X POST http://localhost:5000/api/companies -H "Content-Type: application/json" \
+  -d '{"name":"MyCompany","website":"https://www.mycompany.com"}'
+curl http://localhost:5000/api/companies
+```
+
+- **Swagger UI:** http://localhost:5000/swagger (Development only).
+- **Defaults chosen to match the exercise:** data is kept **in memory only** (no database) and **authentication is off**, so the API can be used straight away from the frontend, Postman or curl. Both are configuration switches; see [Configuration](#configuration).
+- **HTTPS (port 7000)** uses the ASP.NET Core dev certificate. Trust it once with `dotnet dev-certs https --trust`, or use plain HTTP on port 5000.
 
 ```
 CompanyApi.sln
-src/CompanyApi.Api              Controllers, Program.cs, DTOs (Contracts/), error mapping, DI wiring
+src/CompanyApi.Api              Controllers, Program.cs, DTOs (Contracts/), error mapping, auth, DI wiring
 src/CompanyApi.Application      Domain model, ICompanyService/CompanyService, validator, relevance model, interfaces
-src/CompanyApi.Infrastructure   CompanyDbContext + EfCompanyRepository (EF Core InMemory), HttpWebsiteContentFetcher
-tests/CompanyApi.UnitTests      Validator, relevance, service, repository, mapping, content-fetcher tests
-tests/CompanyApi.IntegrationTests  API tests with WebApplicationFactory
+src/CompanyApi.Infrastructure   InMemoryCompanyRepository (default), EfCompanyRepository (optional), HttpWebsiteContentFetcher
+tests/CompanyApi.UnitTests      Validator, relevance, service, repository contract, mapping, auth, content-fetcher tests
+tests/CompanyApi.IntegrationTests  API tests with WebApplicationFactory (both persistence providers, auth on and off)
 frontend/company-app            Angular 22 app (standalone components, reactive forms, HttpClient)
 ```
 
-## Prerequisites
+## Configuration
 
-| Tool | Version | Notes |
+All switches live in `src/CompanyApi.Api/appsettings.json` and can be overridden with environment variables (`__` separates sections, e.g. `Auth__Enabled=true`).
+
+| Setting | Default | Values |
 |---|---|---|
-| .NET SDK | 10.0.x (LTS) | `global.json` pins 10.0 with `latestFeature` roll-forward |
-| Node.js | 22 LTS (≥ 20.19 required by Angular 22) | `frontend/company-app/.nvmrc` → `nvm use 22` |
-| npm | 10+ | ships with Node 22 |
+| `Persistence:Provider` | `InMemory` | `InMemory`: a private `ConcurrentDictionary`, no database involved. `EfInMemory`: EF Core with its InMemory provider, the same code path a real database would use. Either way, data is lost when the API restarts. |
+| `Auth:Enabled` | `false` | `true` makes every `/api/companies` endpoint require a bearer token; see [Authentication](#authentication). |
+| `Relevance:Threshold` | `0.5` | Minimum relevance score to accept a company. |
+| `Relevance:SearchMinScore` | `0.3` | Minimum score for a company to appear in `q` searches. |
+| `Relevance:EnableContentInspection` | `false` | Also read the website's title and meta tags (see [Relevance strategy](#relevance-strategy)). |
+| `Cors:AllowedOrigins` | `http://localhost:4200` | Origins allowed to call the API from a browser. |
 
-HTTPS on port 7000 uses the ASP.NET Core dev certificate. Trust it once with `dotnet dev-certs https --trust`, or call the API over plain HTTP on port 5000.
-
-## Run
-
-**Backend:** listens on http://localhost:5000 and https://localhost:7000.
+Example, both optional features on:
 
 ```bash
 cd src/CompanyApi.Api
-dotnet run
+Persistence__Provider=EfInMemory Auth__Enabled=true dotnet run          # bash
+$env:Persistence__Provider="EfInMemory"; $env:Auth__Enabled="true"; dotnet run   # PowerShell
 ```
 
-In Development, Swagger UI is at http://localhost:5000/swagger and the OpenAPI document is at `/openapi/v1.json`.
+## Frontend
 
-**Frontend:** runs at http://localhost:4200.
-
-```bash
-cd frontend/company-app
-nvm use 22            # or any Node ≥ 20.19
-npm install
-npx ng serve          # or: npm start
-```
-
-Sign in with the demo user **`admin` / `Admin123!`** (defined in `appsettings.Development.json`).
+The API base URL is set in `src/environments/environment.ts` (`http://localhost:5000/api`) and injected through the `API_BASE_URL` token.
 
 The app has a sidebar and four lazy-loaded routes (`src/app/app.routes.ts`):
 
-| Route | Access | Page | Contents |
-|---|---|---|---|
-| `/login` | signed-out only | `LoginPage` | Sign-in form; returns you to the page you asked for |
-| `/add` (default; `/` and unknown paths redirect here) | signed in | `AddCompanyPage` | Create form + a **Search company** button that goes to `/search` |
-| `/search` | signed in | `SearchCompaniesPage` | Debounced search, refresh and results table + an **Add company** button that goes to `/add` |
-| `/docs` | public | `DocumentationPage` | API reference: endpoints (curl example and every response per endpoint), payloads, validation rules with their exact messages, and the relevance model (steps, weights, threshold, examples) |
+| Route | Page | Contents |
+|---|---|---|
+| `/add` (default; `/` and unknown paths redirect here) | `AddCompanyPage` | Create form + a **Search company** button that goes to `/search` |
+| `/search` | `SearchCompaniesPage` | Debounced search, refresh and results table + an **Add company** button that goes to `/add` |
+| `/docs` | `DocumentationPage` | API reference: endpoints (curl example and every response per endpoint), payloads, validation rules with their exact messages, and the relevance model (steps, weights, threshold, examples) |
+| `/login` | `LoginPage` | Only used when the API has `Auth:Enabled = true`; otherwise it redirects to `/add` |
 
-**Responsive layout.** Above 768px the sidebar is fixed on the left, with the signed-in user and a **Log out** button at the bottom. At 768px and below it becomes a top bar with a menu button; the menu closes after each navigation. At 640px and below, search results show as stacked cards instead of a table, and form buttons span the full width.
+At startup the app calls `GET /api/auth/config`. With authentication off, `/add` and `/search` are open and the sidebar shows no sign-in or log-out. With it on, those pages require signing in.
+
+**Responsive layout.** Above 768px the sidebar is fixed on the left. At 768px and below it becomes a top bar with a menu button; the menu closes after each navigation. At 640px and below, search results show as stacked cards instead of a table, and form buttons span the full width.
 
 ## Authentication
 
-- **API:** JWT bearer tokens signed with HMAC-SHA256 (`Auth:SigningKey`, 60-minute lifetime). Users come from `Auth:Users`; passwords are stored as PBKDF2-SHA256 hashes (100,000 iterations) and compared in constant time. Unknown users and wrong passwords get the same answer, and sign-in is limited to 10 attempts per minute per IP address (429 afterwards).
-- **Frontend:** `AuthService` keeps the session in `sessionStorage`, so it survives a reload but ends when the tab closes. An HTTP interceptor adds the token only to requests for the API base URL. If the API answers 401 (e.g. the token expired), the interceptor signs the user out and sends them to `/login?reason=expired`. Route guards protect `/add` and `/search`, and the post-login redirect accepts only paths inside the app.
-- **Configuration:** the signing key and the demo user are only in `appsettings.Development.json`. In any other environment the API refuses to start without `Auth:SigningKey` (at least 32 characters); provide it and the users through user secrets or environment variables (`Auth__SigningKey`, `Auth__Users__0__Username`, `Auth__Users__0__PasswordHash`). To hash a new password, call `PasswordHasher.Hash("…")` in `src/CompanyApi.Api/Auth/PasswordHasher.cs`.
-- **Limits of this simple layer:** users live in configuration (no registration, roles or password reset), there are no refresh tokens (sign in again after 60 minutes), and a token cannot be revoked before it expires. A real deployment would use an identity provider (OIDC) or ASP.NET Core Identity with a database.
+Off by default (`Auth:Enabled = false`). The code stays in place so it can be switched on without changes.
 
-The API base URL is set in `src/environments/environment.ts` (`http://localhost:5000/api`) and injected through the `API_BASE_URL` token. The backend enables CORS for `http://localhost:4200` (configurable under `Cors:AllowedOrigins`).
+- **Turning it on:** set `Auth:Enabled=true`. In Development the signing key and the demo user **`admin` / `Admin123!`** come from `appsettings.Development.json`. In any other environment the API refuses to start without an `Auth:SigningKey` of at least 32 characters; provide it and the users through user secrets or environment variables (`Auth__SigningKey`, `Auth__Users__0__Username`, `Auth__Users__0__PasswordHash`). To hash a new password, call `PasswordHasher.Hash("…")` in `src/CompanyApi.Api/Auth/PasswordHasher.cs`.
+- **API:** JWT bearer tokens signed with HMAC-SHA256 (60-minute lifetime). Passwords are stored as PBKDF2-SHA256 hashes (100,000 iterations) and compared in constant time. Unknown users and wrong passwords get the same answer, and sign-in is limited to 10 attempts per minute per IP address (429 afterwards). When authentication is off, `[Authorize]` stays on the controllers and the default authorization policy simply allows anonymous callers.
+- **Frontend:** `AuthService` keeps the session in `sessionStorage`, so it survives a reload but ends when the tab closes. An HTTP interceptor adds the token only to requests for the API base URL. If the API answers 401 (e.g. the token expired), the interceptor signs the user out and sends them to `/login?reason=expired`. The post-login redirect accepts only paths inside the app.
+- **Limits of this simple layer:** users live in configuration (no registration, roles or password reset), there are no refresh tokens (sign in again after 60 minutes), and a token cannot be revoked before it expires. A real deployment would use an identity provider (OIDC) or ASP.NET Core Identity with a database.
 
 ## Test
 
@@ -77,13 +97,14 @@ Angular 22's default test runner is Vitest with jsdom, run by `ng test`. Its API
 
 | Method | Route | Success | Errors |
 |---|---|---|---|
-| POST | `/api/auth/login` (public) | 200 `LoginResponse` (bearer token) | 400 missing fields, 401 wrong credentials, 429 more than 10 attempts/min |
-| GET | `/api/auth/me` | 200 `{ "username": … }` | 401 |
 | POST | `/api/companies` | 201 + `Location` + `CompanyResponse` | 400 validation / relevance / malformed body |
 | GET | `/api/companies?name=&domain=&q=&page=&pageSize=` | 200 array (possibly `[]`) | 400 invalid query |
 | GET | `/api/companies/{id}` | 200 `CompanyResponse` | 404 unknown id, **400 when `{id}` is not a GUID** |
+| GET | `/api/auth/config` | 200 `{ "enabled": false }` | — |
+| POST | `/api/auth/login` | 200 `LoginResponse` (bearer token) | 400 missing fields, 401 wrong credentials, 404 auth disabled, 429 more than 10 attempts/min |
+| GET | `/api/auth/me` | 200 `{ "username": … }` | 401 without a valid token |
 
-All `/api/companies` endpoints and `/api/auth/me` require `Authorization: Bearer <token>`. A missing, invalid or expired token returns **401** with an `ErrorResponse`.
+When `Auth:Enabled` is `true`, the `/api/companies` endpoints require `Authorization: Bearer <token>`, and a missing, invalid or expired token returns **401** with an `ErrorResponse`.
 
 - `name` matches any part of the company name, ignoring case and accents.
 - `domain` matches the website host and ignores `www.`. It also accepts subdomains and full URLs.
@@ -101,60 +122,56 @@ Unexpected exceptions return **500** with `{"message":"An unexpected error occur
 ### curl examples
 
 ```bash
-API=http://localhost:5000/api
-B=$API/companies
-
-# Sign in (demo user in appsettings.Development.json) and keep the token
-curl -X POST $API/auth/login -H "Content-Type: application/json" -d '{"username":"admin","password":"Admin123!"}'
-# {"accessToken":"eyJhbGciOi…","tokenType":"Bearer","expiresAt":"2026-11-14T02:35:46+00:00","username":"admin"}
-TOKEN=$(curl -s -X POST $API/auth/login -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"Admin123!"}' | sed -E 's/.*"accessToken":"([^"]+)".*/\1/')
-AUTH="Authorization: Bearer $TOKEN"
-
-# Sign in: wrong password (401), no token (401)
-curl -X POST $API/auth/login -H "Content-Type: application/json" -d '{"username":"admin","password":"nope"}'
-# {"message":"Invalid username or password.", ...}
-curl $B
-# {"message":"Authentication is required. Sign in and send the token as 'Authorization: Bearer {token}'.", ...}
-
-# Current user
-curl -H "$AUTH" $API/auth/me    # {"username":"admin"}
+B=http://localhost:5000/api/companies
 
 # POST: success (201 + Location)
-curl -H "$AUTH" -i -X POST $B -H "Content-Type: application/json" -d '{"name":"MyCompany","website":"https://www.mycompany.com"}'
+curl -i -X POST $B -H "Content-Type: application/json" -d '{"name":"MyCompany","website":"https://www.mycompany.com"}'
 # HTTP/1.1 201 Created
 # Location: http://localhost:5000/api/companies/5f8aa2db-5162-482b-a0ad-19b3f5d98456
 # {"id":"5f8aa2db-5162-482b-a0ad-19b3f5d98456","name":"MyCompany","website":"https://www.mycompany.com"}
 
 # POST: validation errors (400)
-curl -H "$AUTH" -X POST $B -H "Content-Type: application/json" -d '{"name":"","website":"https://www.mycompany.com"}'
+curl -X POST $B -H "Content-Type: application/json" -d '{"name":"","website":"https://www.mycompany.com"}'
 # {"message":"Company name is required.","errors":["Company name is required."]}
-curl -H "$AUTH" -X POST $B -H "Content-Type: application/json" -d '{"name":"MyCompany","website":"ftp://mycompany.com"}'
+curl -X POST $B -H "Content-Type: application/json" -d '{"name":"MyCompany","website":"ftp://mycompany.com"}'
 # {"message":"Website URL scheme must be http or https.", ...}
 
 # POST: irrelevant name/website pair (400, with the explanation)
-curl -H "$AUTH" -X POST $B -H "Content-Type: application/json" -d '{"name":"MyCompany","website":"https://www.google.com"}'
+curl -X POST $B -H "Content-Type: application/json" -d '{"name":"MyCompany","website":"https://www.google.com"}'
 # {"message":"Company name 'MyCompany' does not appear to be relevant to website 'https://www.google.com'.",
 #  "errors":[..., "Name tokens [mycompany] vs domain 'google': domain match 0.00, token overlap 0.00, fuzzy similarity 0.43 -> offline score 0.17."]}
 
 # POST: malformed JSON (400)
-curl -H "$AUTH" -X POST $B -H "Content-Type: application/json" -d '{"name": "MyCompany",'
+curl -X POST $B -H "Content-Type: application/json" -d '{"name": "MyCompany",'
 # {"message":"The request body is empty or is not valid JSON.", ...}
 
 # GET list: success, filters, relevance search
-curl -H "$AUTH" $B           # [] when empty, otherwise every company
-curl -H "$AUTH" "$B?name=comp"           # [{"id":"…","name":"MyCompany","website":"https://www.mycompany.com"}]
-curl -H "$AUTH" "$B?domain=mycompany.com"   # same
-curl -H "$AUTH" "$B?q=acme"             # [{"id":"…","name":"Acme Tools Inc.","website":"https://acmetools.com","score":0.7889,"explanation":"…"}]
-curl -H "$AUTH" "$B?name=zzz"           # []
+curl $B                          # [] when empty, otherwise every company
+curl "$B?name=comp"              # [{"id":"…","name":"MyCompany","website":"https://www.mycompany.com"}]
+curl "$B?domain=mycompany.com"   # same
+curl "$B?q=acme"                 # [{"id":"…","name":"Acme Tools Inc.","website":"https://acmetools.com","score":0.7889,"explanation":"…"}]
+curl "$B?name=zzz"               # []
 
 # GET list: invalid query (400)
-curl -H "$AUTH" "$B?pageSize=0"         # {"message":"pageSize must be between 1 and 100.", ...}
+curl "$B?pageSize=0"             # {"message":"pageSize must be between 1 and 100.", ...}
 
 # GET by id: success, not found, bad format
-curl -H "$AUTH" $B/5f8aa2db-5162-482b-a0ad-19b3f5d98456       # 200
-curl -H "$AUTH" $B/00000000-0000-0000-0000-000000000001       # 404 {"message":"Company '…' was not found.", ...}
-curl -H "$AUTH" $B/not-a-guid                                 # 400 {"message":"'not-a-guid' is not a valid company id (expected a GUID).", ...}
+curl $B/5f8aa2db-5162-482b-a0ad-19b3f5d98456   # 200
+curl $B/00000000-0000-0000-0000-000000000001   # 404 {"message":"Company '…' was not found.", ...}
+curl $B/not-a-guid                             # 400 {"message":"'not-a-guid' is not a valid company id (expected a GUID).", ...}
+```
+
+With `Auth:Enabled=true`, sign in first and send the token:
+
+```bash
+API=http://localhost:5000/api
+curl $API/auth/config                          # {"enabled":true}
+TOKEN=$(curl -s -X POST $API/auth/login -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"Admin123!"}' | sed -E 's/.*"accessToken":"([^"]+)".*/\1/')
+curl -H "Authorization: Bearer $TOKEN" $API/companies   # 200
+curl $API/companies                                     # 401 {"message":"Authentication is required. ...", ...}
+curl -X POST $API/auth/login -H "Content-Type: application/json" -d '{"username":"admin","password":"nope"}'
+# 401 {"message":"Invalid username or password.", ...}
 ```
 
 ## Validation rules
@@ -201,19 +218,21 @@ The **same model ranks `q` searches**: `ScoreQuery` scores the query tokens agai
 - **Expected failures are values.** The service returns `Result<T>` with status `Ok`, `Invalid` or `NotFound` instead of throwing. Exceptions are reserved for unexpected faults, which `GlobalExceptionHandler` (`IExceptionHandler`) turns into 500s.
 - **DTOs only at the boundary.** The API contracts are `CreateCompanyRequest`, `CompanyResponse`, `CompanySearchResult`, `CompanySearchRequest` and `ErrorResponse`. The internal `Company` record also has `Host` and `CreatedAtUtc`, which never appear in a response; an integration test checks this. Mapping lives in `Mapping/CompanyMappings.cs`.
 - **One error shape.** `[ApiController]` model-state errors are routed through `ValidationErrorFactory` (`InvalidModelStateResponseFactory`), so data-annotation failures, malformed JSON, service validation and relevance errors all return the same `ErrorResponse`.
-- **Repository abstraction.** `ICompanyRepository` is fully async with `CancellationToken`. The active implementation is `EfCompanyRepository`, on top of `CompanyDbContext` with the EF Core **InMemory** provider. It is registered as scoped (one `DbContext` per request) in `Infrastructure/DependencyInjection.cs`, and reads use `AsNoTracking`, so callers get detached snapshots. Each app instance gets its own `InMemoryDatabaseRoot`, so separate hosts such as the integration tests never share data. Data is lost when the API restarts.
-- **Earlier implementation kept as reference.** `InMemoryCompanyRepository` (a `ConcurrentDictionary`) is no longer registered but stays in the code. Both repositories run the same contract tests (`CompanyRepositoryContractTests`), which is how any future implementation should be checked too.
-- **Configuration.** `RelevanceOptions` is bound from `appsettings.json` and validated with data annotations at startup.
+- **Repository abstraction.** `ICompanyRepository` is fully async with `CancellationToken`, and its implementations are private to Infrastructure.
+  - **Default, `InMemoryCompanyRepository`:** a private `ConcurrentDictionary<Guid, Company>` registered as a singleton. It returns snapshot copies of immutable records, so callers can never change what is stored. This follows the exercise's "in memory only, no database" rule literally.
+  - **Optional, `EfCompanyRepository`** (`Persistence:Provider=EfInMemory`): EF Core with its InMemory provider, scoped (one `DbContext` per request), with `AsNoTracking` reads. Each app instance gets its own `InMemoryDatabaseRoot`, so separate hosts such as the integration tests never share data. It shows the path to a real database.
+  - Both run the same contract tests (`CompanyRepositoryContractTests`), which is how any future implementation should be checked too.
+- **Configuration.** `RelevanceOptions` and `AuthOptions` are bound from `appsettings.json` and validated at startup; an unknown `Persistence:Provider` also fails at startup with a clear message.
 - **Non-GUID ids return 400**, not 404. The id has an invalid format, which is a client error. A valid GUID that matches nothing returns 404.
-- **Logging.** Information on create, get, search and not-found; Warning on validation, relevance rejection and content-inspection failure; Error on unhandled exceptions.
+- **Logging.** Information on create, get, search and not-found; Warning on validation, relevance rejection, failed sign-in and content-inspection failure; Error on unhandled exceptions.
 
 ## Extensibility
 
-- **PUT/DELETE.** `ICompanyRepository` already has `UpdateAsync` and `DeleteAsync`, both implemented and tested. To expose them, add `UpdateAsync` to the service (reusing the validator and relevance check, like create) and `DeleteAsync`, then add two controller actions returning 200/204/400/404. The service already produces every `Result` shape needed.
+- **PUT/DELETE.** `ICompanyRepository` already has `UpdateAsync` and `DeleteAsync`, implemented and tested in both repositories. To expose them, add `UpdateAsync` to the service (reusing the validator and relevance check, like create) and `DeleteAsync`, then add two controller actions returning 200/204/400/404. The service already produces every `Result` shape needed.
 - **Pagination and sorting.** `page` and `pageSize` work today. To add `sortBy` and `sortDir`, add optional properties to `CompanySearchRequest` and `CompanySearchQuery`. The response stays a plain array and the total travels in `X-Total-Count`, so existing clients keep working.
-- **Real database.** EF Core is already in place, so only the provider changes:
+- **Real database.** The EF Core path already exists, so only the provider changes:
   1. Add the provider package (e.g. `Microsoft.EntityFrameworkCore.SqlServer` or `Npgsql.EntityFrameworkCore.PostgreSQL`).
-  2. In `AddInfrastructure`, replace `UseInMemoryDatabase(...)` with `UseSqlServer(connectionString)` or `UseNpgsql(...)`, and drop the `InMemoryDatabaseRoot` registration.
+  2. In `AddInfrastructure`, add a provider option that calls `UseSqlServer(connectionString)` or `UseNpgsql(...)` instead of `UseInMemoryDatabase(...)`.
   3. Add `entity.ToTable("Companies")` in `CompanyDbContext` and create the schema: `dotnet ef migrations add InitialCreate -p src/CompanyApi.Infrastructure -s src/CompanyApi.Api`.
 
   Service, controllers, DTOs and frontend stay the same. For large data sets, also move the name/domain filters and paging from `CompanyService.SearchAsync` into a repository query, so they run in SQL.
@@ -223,6 +242,7 @@ The **same model ranks `q` searches**: `ScoreQuery` scores the query tokens agai
 
 - **.NET 10** is used because it is the current LTS; .NET 8 left support on 2026-11-10.
 - **Angular 22** is used, with its default test runner (Vitest), instead of Karma.
+- "At least a few characters" is interpreted as a minimum of **2** (`CompanyInputValidator.NameMinLength`, one constant to change).
 - The website is stored exactly as entered (trimmed), so `https://www.mycompany.com` doesn't come back as `https://www.mycompany.com/`.
 - The default `GET /api/companies` order is by name. `q` results are ordered by score.
 - HTTPS redirection is off, so the Angular dev server and curl can use `http://localhost:5000` without a certificate prompt.

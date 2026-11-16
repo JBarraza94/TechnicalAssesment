@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, catchError, tap } from 'rxjs';
+import { Observable, catchError, firstValueFrom, tap } from 'rxjs';
 import { API_BASE_URL, toApiError } from '../companies/company.service';
 
 /** Mirrors the API's LoginResponse. */
@@ -24,6 +24,27 @@ export class AuthService {
   private readonly session = signal<AuthSession | null>(readStoredSession());
 
   readonly username = computed(() => this.session()?.username ?? null);
+
+  /**
+   * Whether the API requires sign-in (GET /api/auth/config). Starts as true, so a server that cannot
+   * be reached never silently opens the app; loadConfig() relaxes it when the server says so.
+   */
+  readonly authRequired = signal(true);
+
+  /** Called once at startup (provideAppInitializer). Never rejects: on failure auth stays required. */
+  async loadConfig(): Promise<void> {
+    try {
+      const config = await firstValueFrom(this.http.get<{ enabled: boolean }>(`${this.baseUrl}/config`));
+      this.authRequired.set(config.enabled !== false);
+    } catch {
+      this.authRequired.set(true);
+    }
+  }
+
+  /** True when the protected pages can be used: auth is off, or the user is signed in. */
+  canAccessApp(): boolean {
+    return !this.authRequired() || this.isAuthenticated();
+  }
 
   login(username: string, password: string): Observable<AuthSession> {
     return this.http

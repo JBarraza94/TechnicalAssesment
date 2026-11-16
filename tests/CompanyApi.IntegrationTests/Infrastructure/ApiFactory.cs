@@ -9,8 +9,13 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CompanyApi.IntegrationTests.Infrastructure;
 
-/// <summary>Boots the real API in memory. Create one per test so the in-memory store starts empty.</summary>
-public sealed class ApiFactory(Action<IServiceCollection>? configureServices = null) : WebApplicationFactory<Program>
+/// <summary>
+/// Boots the real API in memory. Create one per test so the in-memory store starts empty.
+/// Authentication is enabled unless <paramref name="settings"/> says otherwise, so the auth path is always exercised.
+/// </summary>
+public sealed class ApiFactory(
+    Action<IServiceCollection>? configureServices = null,
+    IReadOnlyDictionary<string, string?>? settings = null) : WebApplicationFactory<Program>
 {
     public const string Username = "tester";
     public const string Password = "Correct-Horse-9";
@@ -25,6 +30,11 @@ public sealed class ApiFactory(Action<IServiceCollection>? configureServices = n
         builder.UseSetting("Auth:SigningKey", "integration-tests-signing-key-0123456789abcdef");
         builder.UseSetting("Auth:Users:0:Username", Username);
         builder.UseSetting("Auth:Users:0:PasswordHash", PasswordHash);
+        builder.UseSetting("Auth:Enabled", "true");
+        foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
+        {
+            builder.UseSetting(key, value);
+        }
         if (configureServices is not null)
         {
             builder.ConfigureTestServices(configureServices);

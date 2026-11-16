@@ -21,7 +21,7 @@ builder.Services.AddOptions<RelevanceOptions>()
     .ValidateOnStart();
 
 builder.Services.AddApplication();
-builder.Services.AddInfrastructure();
+builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();

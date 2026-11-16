@@ -221,5 +221,3 @@ The **same model ranks `q` searches**: `ScoreQuery` scores the query tokens agai
 - The default `GET /api/companies` order is by name. `q` results are ordered by score.
 - HTTPS redirection is off, so the Angular dev server and curl can use `http://localhost:5000` without a certificate prompt.
 - FluentAssertions is pinned to 7.x, the last Apache-2.0 release; 8.x needs a commercial license.
-#   T e c h n i c a l A s s e s m e n t  
- 

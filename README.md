@@ -1,12 +1,12 @@
 # Company API (.NET 10) + Angular frontend
 
-A small REST API that stores companies (name + website) in memory. It accepts a company only when its name is *relevant* to its website, using an explainable relevance model. An Angular app lets you create companies, list them and search them.
+A small REST API that stores companies (name + website) through EF Core, using its in-memory provider. It accepts a company only when its name is *relevant* to its website, using an explainable relevance model. An Angular app lets you create companies, list them and search them.
 
 ```
 CompanyApi.sln
 src/CompanyApi.Api              Controllers, Program.cs, DTOs (Contracts/), error mapping, DI wiring
 src/CompanyApi.Application      Domain model, ICompanyService/CompanyService, validator, relevance model, interfaces
-src/CompanyApi.Infrastructure   InMemoryCompanyRepository, HttpWebsiteContentFetcher
+src/CompanyApi.Infrastructure   CompanyDbContext + EfCompanyRepository (EF Core InMemory), HttpWebsiteContentFetcher
 tests/CompanyApi.UnitTests      Validator, relevance, service, repository, mapping, content-fetcher tests
 tests/CompanyApi.IntegrationTests  API tests with WebApplicationFactory
 frontend/company-app            Angular 22 app (standalone components, reactive forms, HttpClient)
@@ -201,7 +201,8 @@ The **same model ranks `q` searches**: `ScoreQuery` scores the query tokens agai
 - **Expected failures are values.** The service returns `Result<T>` with status `Ok`, `Invalid` or `NotFound` instead of throwing. Exceptions are reserved for unexpected faults, which `GlobalExceptionHandler` (`IExceptionHandler`) turns into 500s.
 - **DTOs only at the boundary.** The API contracts are `CreateCompanyRequest`, `CompanyResponse`, `CompanySearchResult`, `CompanySearchRequest` and `ErrorResponse`. The internal `Company` record also has `Host` and `CreatedAtUtc`, which never appear in a response; an integration test checks this. Mapping lives in `Mapping/CompanyMappings.cs`.
 - **One error shape.** `[ApiController]` model-state errors are routed through `ValidationErrorFactory` (`InvalidModelStateResponseFactory`), so data-annotation failures, malformed JSON, service validation and relevance errors all return the same `ErrorResponse`.
-- **Repository abstraction.** `ICompanyRepository` is fully async with `CancellationToken`. `InMemoryCompanyRepository` keeps a private `ConcurrentDictionary<Guid, Company>`, returns snapshot copies of immutable records, and is registered as a singleton in `Infrastructure/DependencyInjection.cs`.
+- **Repository abstraction.** `ICompanyRepository` is fully async with `CancellationToken`. The active implementation is `EfCompanyRepository`, on top of `CompanyDbContext` with the EF Core **InMemory** provider. It is registered as scoped (one `DbContext` per request) in `Infrastructure/DependencyInjection.cs`, and reads use `AsNoTracking`, so callers get detached snapshots. Each app instance gets its own `InMemoryDatabaseRoot`, so separate hosts such as the integration tests never share data. Data is lost when the API restarts.
+- **Earlier implementation kept as reference.** `InMemoryCompanyRepository` (a `ConcurrentDictionary`) is no longer registered but stays in the code. Both repositories run the same contract tests (`CompanyRepositoryContractTests`), which is how any future implementation should be checked too.
 - **Configuration.** `RelevanceOptions` is bound from `appsettings.json` and validated with data annotations at startup.
 - **Non-GUID ids return 400**, not 404. The id has an invalid format, which is a client error. A valid GUID that matches nothing returns 404.
 - **Logging.** Information on create, get, search and not-found; Warning on validation, relevance rejection and content-inspection failure; Error on unhandled exceptions.
@@ -210,7 +211,12 @@ The **same model ranks `q` searches**: `ScoreQuery` scores the query tokens agai
 
 - **PUT/DELETE.** `ICompanyRepository` already has `UpdateAsync` and `DeleteAsync`, both implemented and tested. To expose them, add `UpdateAsync` to the service (reusing the validator and relevance check, like create) and `DeleteAsync`, then add two controller actions returning 200/204/400/404. The service already produces every `Result` shape needed.
 - **Pagination and sorting.** `page` and `pageSize` work today. To add `sortBy` and `sortDir`, add optional properties to `CompanySearchRequest` and `CompanySearchQuery`. The response stays a plain array and the total travels in `X-Total-Count`, so existing clients keep working.
-- **Real database.** Implement `ICompanyRepository` with EF Core (move the name and domain filters into the query, add an index on `Host`) and change one line in `AddInfrastructure`. Nothing else changes.
+- **Real database.** EF Core is already in place, so only the provider changes:
+  1. Add the provider package (e.g. `Microsoft.EntityFrameworkCore.SqlServer` or `Npgsql.EntityFrameworkCore.PostgreSQL`).
+  2. In `AddInfrastructure`, replace `UseInMemoryDatabase(...)` with `UseSqlServer(connectionString)` or `UseNpgsql(...)`, and drop the `InMemoryDatabaseRoot` registration.
+  3. Add `entity.ToTable("Companies")` in `CompanyDbContext` and create the schema: `dotnet ef migrations add InitialCreate -p src/CompanyApi.Infrastructure -s src/CompanyApi.Api`.
+
+  Service, controllers, DTOs and frontend stay the same. For large data sets, also move the name/domain filters and paging from `CompanyService.SearchAsync` into a repository query, so they run in SQL.
 - **ML or embedding relevance.** Register another `IRelevanceStrategy`, for example cosine similarity of name and page-text embeddings, or a composite of the current lexical strategy and a semantic one. The contract (`Score` in [0, 1] plus an `Explanation`) and the threshold stay the same.
 
 ## Assumptions

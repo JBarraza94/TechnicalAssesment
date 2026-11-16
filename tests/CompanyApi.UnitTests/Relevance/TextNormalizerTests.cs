@@ -5,7 +5,8 @@ namespace CompanyApi.UnitTests.Relevance;
 public sealed class TextNormalizerTests
 {
     [Theory]
-    [InlineData("Verus LLC", new[] { "verus" })]
+    [InlineData("MyCompany", new[] { "mycompany" })]
+    [InlineData("Initech LLC", new[] { "initech" })]
     [InlineData("Acme Tools, Inc.", new[] { "acme", "tools" })]
     [InlineData("Café Niño S.A. de C.V.", new[] { "cafe", "nino" })]
     [InlineData("Müller GmbH", new[] { "muller" })]
@@ -17,7 +18,7 @@ public sealed class TextNormalizerTests
     }
 
     [Theory]
-    [InlineData("www.verus.com", "verus")]
+    [InlineData("www.mycompany.com", "mycompany")]
     [InlineData("acmetools.com", "acmetools")]
     [InlineData("shop.acme-tools.co.uk", "acme-tools")]
     [InlineData("WWW.CafeNino.com.mx", "cafenino")]
@@ -30,8 +31,8 @@ public sealed class TextNormalizerTests
     [Fact]
     public void JaroWinkler_IdenticalAndDisjointStrings_ReturnsBounds()
     {
-        StringSimilarity.JaroWinkler("verus", "verus").Should().Be(1.0);
-        StringSimilarity.JaroWinkler("verus", "google").Should().Be(0.0);
+        StringSimilarity.JaroWinkler("mycompany", "mycompany").Should().Be(1.0);
+        StringSimilarity.JaroWinkler("acme", "xyz").Should().Be(0.0);
         StringSimilarity.JaroWinkler("microsft", "microsoft").Should().BeGreaterThan(0.9);
     }
 }

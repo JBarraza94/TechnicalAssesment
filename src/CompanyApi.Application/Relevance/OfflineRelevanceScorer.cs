@@ -48,7 +48,7 @@ public static class OfflineRelevanceScorer
         return new RelevanceBreakdown(domainMatch, overlap, fuzzy, Math.Clamp(score, 0.0, 1.0));
     }
 
-    // "verus" == "verus", or an acronym of a multi-word name: "International Business Machines" -> "ibm".
+    // "mycompany" == "mycompany", or an acronym of a multi-word name: "International Business Machines" -> "ibm".
     private static bool IsExactMatch(IReadOnlyList<string> tokens, string concatenated, string target) =>
         concatenated == target ||
         (tokens.Count >= 2 && string.Concat(tokens.Select(t => t[0])) == target);

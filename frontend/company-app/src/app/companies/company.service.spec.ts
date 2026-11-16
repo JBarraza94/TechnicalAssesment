@@ -21,22 +21,22 @@ describe('CompanyService', () => {
   afterEach(() => http.verify());
 
   it('create_ValidRequest_PostsAndReturnsCreatedCompany', async () => {
-    const created: Company = { id: '1', name: 'Verus LLC', website: 'https://www.verus.com' };
+    const created: Company = { id: '1', name: 'MyCompany', website: 'https://www.mycompany.com' };
 
-    const result = firstValueFrom(service.create({ name: 'Verus LLC', website: 'https://www.verus.com' }));
+    const result = firstValueFrom(service.create({ name: 'MyCompany', website: 'https://www.mycompany.com' }));
     const req = http.expectOne(`${baseUrl}/companies`);
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ name: 'Verus LLC', website: 'https://www.verus.com' });
+    expect(req.request.body).toEqual({ name: 'MyCompany', website: 'https://www.mycompany.com' });
     req.flush(created, { status: 201, statusText: 'Created' });
 
     await expect(result).resolves.toEqual(created);
   });
 
   it('create_ServerReturns400_PropagatesServerMessage', async () => {
-    const result = firstValueFrom(service.create({ name: 'Verus LLC', website: 'https://www.google.com' }));
+    const result = firstValueFrom(service.create({ name: 'MyCompany', website: 'https://www.google.com' }));
     http.expectOne(`${baseUrl}/companies`).flush(
       {
-        message: "Company name 'Verus LLC' does not appear to be relevant to website 'https://www.google.com'.",
+        message: "Company name 'MyCompany' does not appear to be relevant to website 'https://www.google.com'.",
         errors: ['…', 'explanation'],
       },
       { status: 400, statusText: 'Bad Request' },
@@ -50,7 +50,7 @@ describe('CompanyService', () => {
   });
 
   it('create_ServerReturns500_UsesFriendlyMessage', async () => {
-    const result = firstValueFrom(service.create({ name: 'Verus', website: 'https://verus.com' }));
+    const result = firstValueFrom(service.create({ name: 'MyCompany', website: 'https://mycompany.com' }));
     http.expectOne(`${baseUrl}/companies`).flush({ message: 'boom' }, { status: 500, statusText: 'Server Error' });
 
     await expect(result).rejects.toMatchObject({ message: SERVER_ERROR_MESSAGE, status: 500 });
@@ -64,9 +64,9 @@ describe('CompanyService', () => {
   });
 
   it('list_WithQuery_SendsTrimmedQParameter', async () => {
-    const result = firstValueFrom(service.list('  verus '));
+    const result = firstValueFrom(service.list('  mycompany '));
     const req = http.expectOne((r) => r.url === `${baseUrl}/companies`);
-    expect(req.request.params.get('q')).toBe('verus');
+    expect(req.request.params.get('q')).toBe('mycompany');
     req.flush([]);
 
     await expect(result).resolves.toEqual([]);

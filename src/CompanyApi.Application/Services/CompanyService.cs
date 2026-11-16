@@ -126,7 +126,7 @@ public sealed class CompanyService(
         CultureInfo.InvariantCulture.CompareInfo.IndexOf(
             source, term, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0;
 
-    // Accepts "verus.com", "www.verus.com" or a full URL such as "https://www.verus.com/about".
+    // Accepts "mycompany.com", "www.mycompany.com" or a full URL such as "https://www.mycompany.com/about".
     private static string NormalizeDomainFilter(string domain)
     {
         var value = domain.Trim();

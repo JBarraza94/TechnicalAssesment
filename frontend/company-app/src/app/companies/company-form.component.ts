@@ -11,10 +11,8 @@ import { NAME_MAX_LENGTH, NAME_MIN_LENGTH, companyNameValidator, httpUrlValidato
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-      <h2>Add a company</h2>
-
       <label for="name">Company name</label>
-      <input id="name" formControlName="name" autocomplete="organization" placeholder="Verus LLC" />
+      <input id="name" formControlName="name" autocomplete="organization" placeholder="MyCompany" />
       @if (form.controls.name.touched && form.controls.name.errors; as e) {
         <small class="field-error" data-testid="name-error">
           @if (e['required']) { Company name is required. }
@@ -24,7 +22,7 @@ import { NAME_MAX_LENGTH, NAME_MIN_LENGTH, companyNameValidator, httpUrlValidato
       }
 
       <label for="website">Website URL</label>
-      <input id="website" formControlName="website" type="url" autocomplete="url" placeholder="https://www.verus.com" />
+      <input id="website" formControlName="website" type="url" autocomplete="url" placeholder="https://www.mycompany.com" />
       @if (form.controls.website.touched && form.controls.website.errors; as e) {
         <small class="field-error" data-testid="website-error">
           @if (e['required']) { Website URL is required. }

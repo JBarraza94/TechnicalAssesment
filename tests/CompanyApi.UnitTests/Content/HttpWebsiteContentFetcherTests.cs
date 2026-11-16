@@ -9,9 +9,9 @@ public sealed class HttpWebsiteContentFetcherTests
 {
     private const string Html = """
         <html><head>
-          <title> Verus &amp; Co | Home </title>
-          <meta property="og:site_name" content="Verus">
-          <meta name="description" content="Verus builds tools.">
+          <title> MyCompany &amp; Co | Home </title>
+          <meta property="og:site_name" content="MyCompany">
+          <meta name="description" content="MyCompany builds tools.">
         </head><body>...</body></html>
         """;
 
@@ -20,7 +20,7 @@ public sealed class HttpWebsiteContentFetcherTests
     {
         var content = HttpWebsiteContentFetcher.Parse(Html);
 
-        content.Should().Be(new CompanyApi.Application.Abstractions.WebsiteContent("Verus & Co | Home", "Verus", "Verus builds tools."));
+        content.Should().Be(new CompanyApi.Application.Abstractions.WebsiteContent("MyCompany & Co | Home", "MyCompany", "MyCompany builds tools."));
     }
 
     [Fact]
@@ -34,9 +34,9 @@ public sealed class HttpWebsiteContentFetcherTests
     {
         var sut = CreateSut(new StubHandler(HttpStatusCode.OK, Html, "text/html"));
 
-        var content = await sut.FetchAsync(new Uri("https://www.verus.com"));
+        var content = await sut.FetchAsync(new Uri("https://www.mycompany.com"));
 
-        content!.SiteName.Should().Be("Verus");
+        content!.SiteName.Should().Be("MyCompany");
     }
 
     [Fact]
@@ -44,7 +44,7 @@ public sealed class HttpWebsiteContentFetcherTests
     {
         var sut = CreateSut(new StubHandler(HttpStatusCode.InternalServerError, "oops", "text/html"));
 
-        (await sut.FetchAsync(new Uri("https://www.verus.com"))).Should().BeNull();
+        (await sut.FetchAsync(new Uri("https://www.mycompany.com"))).Should().BeNull();
     }
 
     private static HttpWebsiteContentFetcher CreateSut(HttpMessageHandler handler) =>

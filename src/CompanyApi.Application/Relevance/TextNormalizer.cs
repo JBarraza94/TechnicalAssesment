@@ -15,7 +15,7 @@ public static class TextNormalizer
         ["incorporated"], ["corporation"], ["limited"], ["plc"], ["ag"],
     ];
 
-    // Second-level labels that form part of a country suffix (acme.co.uk, verus.com.mx).
+    // Second-level labels that form part of a country suffix (acme.co.uk, mycompany.com.mx).
     private static readonly HashSet<string> SecondLevelSuffixLabels =
         ["co", "com", "net", "org", "gob", "gov", "edu", "ac", "or", "ne"];
 

@@ -20,7 +20,7 @@ public sealed class CompositeRelevanceStrategyTests
             logger ?? NullLogger<CompositeRelevanceStrategy>.Instance);
 
     [Theory]
-    [InlineData("Verus LLC", "https://www.verus.com")]
+    [InlineData("MyCompany", "https://www.mycompany.com")]
     [InlineData("Acme Tools Inc.", "https://acmetools.com")]
     [InlineData("Café Niño S.A. de C.V.", "https://www.cafenino.com.mx")]
     [InlineData("Señor Pañuelo, Ltd.", "https://senor-panuelo.co.uk")]
@@ -36,14 +36,14 @@ public sealed class CompositeRelevanceStrategyTests
     [Fact]
     public async Task EvaluateAsync_ExactDomainMatch_ScoresOne()
     {
-        var result = await CreateSut().EvaluateAsync("Verus LLC", new Uri("https://www.verus.com"));
+        var result = await CreateSut().EvaluateAsync("MyCompany", new Uri("https://www.mycompany.com"));
 
         result.Score.Should().Be(1.0);
         result.Explanation.Should().Contain("domain match 1.00");
     }
 
     [Theory]
-    [InlineData("Verus LLC", "https://www.google.com")]
+    [InlineData("MyCompany", "https://www.google.com")]
     [InlineData("Banana Co", "https://www.microsoft.com")]
     [InlineData("Globex Corporation", "https://initech.com")]
     public async Task EvaluateAsync_IrrelevantPair_ScoresBelowThresholdWithExplanation(string name, string website)
@@ -65,8 +65,8 @@ public sealed class CompositeRelevanceStrategyTests
     }
 
     [Theory]
-    [InlineData("Verus LLC", "https://www.verus.com")]
-    [InlineData("Verus LLC", "https://www.google.com")]
+    [InlineData("MyCompany", "https://www.mycompany.com")]
+    [InlineData("MyCompany", "https://www.google.com")]
     [InlineData("!!", "https://www.example.com")]
     [InlineData("Co", "https://co.com")]
     [InlineData("a b c d e f g", "https://abcdefg.com")]
@@ -113,8 +113,8 @@ public sealed class CompositeRelevanceStrategyTests
         var logger = new Mock<ILogger<CompositeRelevanceStrategy>>();
         var website = new Uri("https://www.google.com");
 
-        var offline = await CreateSut().EvaluateAsync("Verus LLC", website);
-        var act = () => CreateSut(fetcher.Object, enableContent: true, logger.Object).EvaluateAsync("Verus LLC", website);
+        var offline = await CreateSut().EvaluateAsync("MyCompany", website);
+        var act = () => CreateSut(fetcher.Object, enableContent: true, logger.Object).EvaluateAsync("MyCompany", website);
 
         var result = (await act.Should().NotThrowAsync()).Subject;
         result.Score.Should().Be(offline.Score);
@@ -142,11 +142,11 @@ public sealed class CompositeRelevanceStrategyTests
     {
         var sut = CreateSut();
 
-        var verus = sut.ScoreQuery("verus", "Verus LLC", new Uri("https://www.verus.com"));
-        var acme = sut.ScoreQuery("verus", "Acme Tools Inc.", new Uri("https://acmetools.com"));
+        var mycompany = sut.ScoreQuery("mycompany", "MyCompany", new Uri("https://www.mycompany.com"));
+        var acme = sut.ScoreQuery("mycompany", "Acme Tools Inc.", new Uri("https://acmetools.com"));
 
-        verus.Score.Should().Be(1.0);
-        acme.Score.Should().BeLessThan(verus.Score);
+        mycompany.Score.Should().Be(1.0);
+        acme.Score.Should().BeLessThan(mycompany.Score);
         acme.Score.Should().BeInRange(0.0, 1.0);
     }
 

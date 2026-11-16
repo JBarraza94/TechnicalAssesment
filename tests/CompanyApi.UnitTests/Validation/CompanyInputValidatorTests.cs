@@ -8,7 +8,7 @@ public sealed class CompanyInputValidatorTests
     private readonly CompanyInputValidator _sut = new();
 
     [Theory]
-    [InlineData("Verus LLC", "https://www.verus.com")]
+    [InlineData("MyCompany", "https://www.mycompany.com")]
     [InlineData("Ab", "http://ab.io")]
     [InlineData("  Acme Tools Inc.  ", "https://acmetools.com/about?x=1")]
     public void Validate_ValidNameAndUrl_Passes(string name, string website)

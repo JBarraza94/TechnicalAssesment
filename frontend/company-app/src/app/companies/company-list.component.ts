@@ -15,7 +15,7 @@ export const SEARCH_DEBOUNCE_MS = 300;
   template: `
     <section>
       <div class="toolbar">
-        <h2>Companies</h2>
+        <h2>Results</h2>
         <input
           type="search"
           [formControl]="search"
@@ -35,7 +35,7 @@ export const SEARCH_DEBOUNCE_MS = 300;
         <p class="empty" data-testid="empty">No companies found</p>
       } @else {
         <div class="table-wrap">
-          <table>
+          <table class="results-table">
             <thead>
               <tr>
                 <th>Name</th>
@@ -47,10 +47,12 @@ export const SEARCH_DEBOUNCE_MS = 300;
             <tbody>
               @for (company of companies(); track company.id) {
                 <tr>
-                  <td>{{ company.name }}</td>
-                  <td><a [href]="company.website" target="_blank" rel="noopener noreferrer">{{ company.website }}</a></td>
-                  <td><code>{{ company.id }}</code></td>
-                  @if (showScore()) { <td [title]="company.explanation ?? ''">{{ company.score | number: '1.2-2' }}</td> }
+                  <td data-label="Name">{{ company.name }}</td>
+                  <td data-label="Website"><a [href]="company.website" target="_blank" rel="noopener noreferrer">{{ company.website }}</a></td>
+                  <td data-label="Id"><code>{{ company.id }}</code></td>
+                  @if (showScore()) {
+                    <td data-label="Score" [title]="company.explanation ?? ''">{{ company.score | number: '1.2-2' }}</td>
+                  }
                 </tr>
               }
             </tbody>

@@ -2,12 +2,15 @@ using CompanyApi.Api.Contracts;
 using CompanyApi.Api.Mapping;
 using CompanyApi.Application.Common;
 using CompanyApi.Application.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CompanyApi.Api.Controllers;
 
-/// <summary>Create, list/search and fetch companies.</summary>
+/// <summary>Create, list/search and fetch companies. Every endpoint requires a bearer token.</summary>
 [ApiController]
+[Authorize]
+[ProducesResponseType<ErrorResponse>(StatusCodes.Status401Unauthorized)]
 [Route("api/companies")]
 [Produces("application/json")]
 public sealed class CompaniesController(ICompanyService companyService) : ControllerBase

@@ -37,23 +37,23 @@ public sealed class CompanyServiceTests
     [Fact]
     public async Task CreateAsync_ValidInput_PersistsOnceAndReturnsCompanyWithNewId()
     {
-        var result = await _sut.CreateAsync(new CreateCompanyCommand("  Verus LLC ", " https://www.verus.com "));
+        var result = await _sut.CreateAsync(new CreateCompanyCommand("  MyCompany ", " https://www.mycompany.com "));
 
         result.Status.Should().Be(ResultStatus.Ok);
         result.Value!.Id.Should().NotBe(Guid.Empty);
-        result.Value.Name.Should().Be("Verus LLC");
-        result.Value.Website.Should().Be("https://www.verus.com");
-        result.Value.Host.Should().Be("verus.com");
+        result.Value.Name.Should().Be("MyCompany");
+        result.Value.Website.Should().Be("https://www.mycompany.com");
+        result.Value.Host.Should().Be("mycompany.com");
         _repository.Verify(r => r.AddAsync(
-            It.Is<Company>(c => c.Id == result.Value.Id && c.Name == "Verus LLC"), It.IsAny<CancellationToken>()), Times.Once);
+            It.Is<Company>(c => c.Id == result.Value.Id && c.Name == "MyCompany"), It.IsAny<CancellationToken>()), Times.Once);
         VerifyLogged(LogLevel.Information);
     }
 
     [Theory]
-    [InlineData("", "https://www.verus.com", "Company name is required.")]
-    [InlineData("V", "https://www.verus.com", "Company name must be at least 2 characters.")]
-    [InlineData("Verus", "verus.com", CompanyInputValidator.Messages.WebsiteMalformed)]
-    [InlineData("Verus", "ftp://verus.com", CompanyInputValidator.Messages.WebsiteScheme)]
+    [InlineData("", "https://www.mycompany.com", "Company name is required.")]
+    [InlineData("V", "https://www.mycompany.com", "Company name must be at least 2 characters.")]
+    [InlineData("MyCompany", "mycompany.com", CompanyInputValidator.Messages.WebsiteMalformed)]
+    [InlineData("MyCompany", "ftp://mycompany.com", CompanyInputValidator.Messages.WebsiteScheme)]
     public async Task CreateAsync_InvalidInput_ReturnsInvalidAndNeverPersists(string name, string website, string message)
     {
         var result = await _sut.CreateAsync(new CreateCompanyCommand(name, website));
@@ -69,13 +69,13 @@ public sealed class CompanyServiceTests
     public async Task CreateAsync_RelevanceBelowThreshold_ReturnsRelevanceMessageAndNeverPersists()
     {
         _relevance
-            .Setup(r => r.EvaluateAsync("Verus LLC", It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
+            .Setup(r => r.EvaluateAsync("MyCompany", It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new RelevanceResult(0.1, "no overlap"));
 
-        var result = await _sut.CreateAsync(new CreateCompanyCommand("Verus LLC", "https://www.google.com"));
+        var result = await _sut.CreateAsync(new CreateCompanyCommand("MyCompany", "https://www.google.com"));
 
         result.Status.Should().Be(ResultStatus.Invalid);
-        result.Message.Should().Be("Company name 'Verus LLC' does not appear to be relevant to website 'https://www.google.com'.");
+        result.Message.Should().Be("Company name 'MyCompany' does not appear to be relevant to website 'https://www.google.com'.");
         result.Errors.Should().Contain("no overlap");
         _repository.Verify(r => r.AddAsync(It.IsAny<Company>(), It.IsAny<CancellationToken>()), Times.Never);
         VerifyLogged(LogLevel.Warning);
@@ -88,7 +88,7 @@ public sealed class CompanyServiceTests
             .Setup(r => r.EvaluateAsync(It.IsAny<string>(), It.IsAny<Uri>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new RelevanceResult(0.5, "borderline"));
 
-        var result = await _sut.CreateAsync(new CreateCompanyCommand("Verus", "https://verus.com"));
+        var result = await _sut.CreateAsync(new CreateCompanyCommand("MyCompany", "https://mycompany.com"));
 
         result.IsSuccess.Should().BeTrue();
     }
@@ -98,7 +98,7 @@ public sealed class CompanyServiceTests
     [Fact]
     public async Task GetByIdAsync_ExistingId_ReturnsCompany()
     {
-        var company = NewCompany("Verus LLC", "https://www.verus.com");
+        var company = NewCompany("MyCompany", "https://www.mycompany.com");
         _repository.Setup(r => r.GetByIdAsync(company.Id, It.IsAny<CancellationToken>())).ReturnsAsync(company);
 
         var result = await _sut.GetByIdAsync(company.Id);
@@ -122,55 +122,55 @@ public sealed class CompanyServiceTests
 
     // ---------- Search ----------
 
-    private static readonly Company Verus = NewCompany("Verus LLC", "https://www.verus.com");
+    private static readonly Company MyCompany = NewCompany("MyCompany", "https://www.mycompany.com");
     private static readonly Company Acme = NewCompany("Acme Tools Inc.", "https://acmetools.com");
-    private static readonly Company Severus = NewCompany("Severus Labs", "https://severuslabs.io");
+    private static readonly Company Compass = NewCompany("Compass Labs", "https://compasslabs.io");
 
     private void SeedRepository(params Company[] companies) =>
         _repository.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(companies);
 
     [Theory]
-    [InlineData("ver")]
-    [InlineData("VERUS")]
-    [InlineData("Vérus")]
+    [InlineData("comp")]
+    [InlineData("COMP")]
+    [InlineData("Cómp")]
     public async Task SearchAsync_PartialNameCaseInsensitive_ReturnsMatchesOnly(string name)
     {
-        SeedRepository(Verus, Acme, Severus);
+        SeedRepository(MyCompany, Acme, Compass);
 
         var result = await _sut.SearchAsync(new CompanySearchQuery(Name: name));
 
-        result.Items.Select(h => h.Company.Name).Should().BeEquivalentTo("Verus LLC", "Severus Labs");
+        result.Items.Select(h => h.Company.Name).Should().BeEquivalentTo("MyCompany", "Compass Labs");
         result.Items.Should().OnlyContain(h => h.Score == null);
     }
 
     [Theory]
-    [InlineData("verus.com")]
-    [InlineData("www.verus.com")]
-    [InlineData("https://verus.com/about")]
+    [InlineData("mycompany.com")]
+    [InlineData("www.mycompany.com")]
+    [InlineData("https://mycompany.com/about")]
     public async Task SearchAsync_DomainFilter_MatchesHostIgnoringWww(string domain)
     {
-        SeedRepository(Verus, Acme, Severus);
+        SeedRepository(MyCompany, Acme, Compass);
 
         var result = await _sut.SearchAsync(new CompanySearchQuery(Domain: domain));
 
-        result.Items.Should().ContainSingle().Which.Company.Should().Be(Verus);
+        result.Items.Should().ContainSingle().Which.Company.Should().Be(MyCompany);
     }
 
     [Fact]
     public async Task SearchAsync_RelevanceQuery_OrdersByScoreDescendingAndDropsLowScores()
     {
-        SeedRepository(Acme, Severus, Verus);
-        _relevance.Setup(r => r.ScoreQuery("verus", It.IsAny<string>(), It.IsAny<Uri>()))
+        SeedRepository(Acme, Compass, MyCompany);
+        _relevance.Setup(r => r.ScoreQuery("mycompany", It.IsAny<string>(), It.IsAny<Uri>()))
             .Returns((string _, string name, Uri _) => name switch
             {
-                "Verus LLC" => new RelevanceResult(1.0, "exact"),
-                "Severus Labs" => new RelevanceResult(0.7, "partial"),
+                "MyCompany" => new RelevanceResult(1.0, "exact"),
+                "Compass Labs" => new RelevanceResult(0.7, "partial"),
                 _ => new RelevanceResult(0.1, "none"),
             });
 
-        var result = await _sut.SearchAsync(new CompanySearchQuery(Q: "verus"));
+        var result = await _sut.SearchAsync(new CompanySearchQuery(Q: "mycompany"));
 
-        result.Items.Select(h => h.Company.Name).Should().Equal("Verus LLC", "Severus Labs");
+        result.Items.Select(h => h.Company.Name).Should().Equal("MyCompany", "Compass Labs");
         result.Items.Select(h => h.Score).Should().BeInDescendingOrder();
         result.Items[0].Explanation.Should().Be("exact");
     }
@@ -178,7 +178,7 @@ public sealed class CompanyServiceTests
     [Fact]
     public async Task SearchAsync_NoMatches_ReturnsEmptyListNotNull()
     {
-        SeedRepository(Verus, Acme);
+        SeedRepository(MyCompany, Acme);
 
         var result = await _sut.SearchAsync(new CompanySearchQuery(Name: "zzz"));
 
@@ -200,12 +200,12 @@ public sealed class CompanyServiceTests
     [Fact]
     public async Task SearchAsync_WithPageSize_ReturnsRequestedPageAndTotal()
     {
-        SeedRepository(Verus, Acme, Severus);
+        SeedRepository(MyCompany, Acme, Compass);
 
         var result = await _sut.SearchAsync(new CompanySearchQuery(Page: 2, PageSize: 2));
 
         result.TotalCount.Should().Be(3);
-        result.Items.Should().ContainSingle().Which.Company.Should().Be(Verus); // sorted by name: Acme, Severus, Verus
+        result.Items.Should().ContainSingle().Which.Company.Should().Be(MyCompany); // sorted by name: Acme, Compass, MyCompany
     }
 
     private static Company NewCompany(string name, string website) =>

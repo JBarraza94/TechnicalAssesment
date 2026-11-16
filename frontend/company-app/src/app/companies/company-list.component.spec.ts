@@ -8,7 +8,7 @@ describe('CompanyListComponent', () => {
   let fixture: ComponentFixture<CompanyListComponent>;
   const serviceMock = { list: vi.fn(), create: vi.fn() };
   const companies: Company[] = [
-    { id: '1', name: 'Verus LLC', website: 'https://www.verus.com' },
+    { id: '1', name: 'MyCompany', website: 'https://www.mycompany.com' },
     { id: '2', name: 'Acme Tools Inc.', website: 'https://acmetools.com' },
   ];
 
@@ -47,8 +47,8 @@ describe('CompanyListComponent', () => {
 
     const rows = fixture.nativeElement.querySelectorAll('tbody tr');
     expect(rows.length).toBe(2);
-    expect(rows[0].textContent).toContain('Verus LLC');
-    expect(rows[0].textContent).toContain('https://www.verus.com');
+    expect(rows[0].textContent).toContain('MyCompany');
+    expect(rows[0].textContent).toContain('https://www.mycompany.com');
     expect(el('[data-testid="empty"]')).toBeNull();
   });
 
@@ -79,7 +79,7 @@ describe('CompanyListComponent', () => {
     serviceMock.list.mockClear();
 
     const input = el('input[type="search"]') as HTMLInputElement;
-    for (const value of ['v', 've', 'verus']) {
+    for (const value of ['v', 've', 'mycompany']) {
       input.value = value;
       input.dispatchEvent(new Event('input'));
     }
@@ -88,6 +88,6 @@ describe('CompanyListComponent', () => {
     vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
 
     expect(serviceMock.list).toHaveBeenCalledOnce();
-    expect(serviceMock.list).toHaveBeenCalledWith('verus');
+    expect(serviceMock.list).toHaveBeenCalledWith('mycompany');
   });
 });

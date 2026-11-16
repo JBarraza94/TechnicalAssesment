@@ -7,13 +7,13 @@ namespace CompanyApi.Api.Contracts;
 public sealed record CreateCompanyRequest
 {
     /// <summary>Company name (2-200 characters after trimming).</summary>
-    /// <example>Verus LLC</example>
+    /// <example>MyCompany</example>
     [Required(ErrorMessage = CompanyInputValidator.Messages.NameRequired)]
     [MaxLength(CompanyInputValidator.NameMaxLength + 50, ErrorMessage = "Company name is too long.")]
     public string? Name { get; init; }
 
     /// <summary>Absolute http(s) URL of the company's website.</summary>
-    /// <example>https://www.verus.com</example>
+    /// <example>https://www.mycompany.com</example>
     [Required(ErrorMessage = CompanyInputValidator.Messages.WebsiteRequired)]
     public string? Website { get; init; }
 }

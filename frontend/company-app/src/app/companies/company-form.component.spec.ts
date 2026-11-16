@@ -52,7 +52,7 @@ describe('CompanyFormComponent', () => {
     ['ftp://example.com', 'urlScheme'],
     ['https://localhost', 'urlHost'],
   ])('submitButton_MalformedUrl_%s_IsDisabled', async (website, errorKey) => {
-    await fill('Verus LLC', website);
+    await fill('MyCompany', website);
 
     expect(component.form.controls.website.hasError(errorKey)).toBe(true);
     expect(submitButton().disabled).toBe(true);
@@ -60,7 +60,7 @@ describe('CompanyFormComponent', () => {
   });
 
   it.each([['A'], ['   ']])('submitButton_InvalidName_%j_IsDisabled', async (name) => {
-    await fill(name, 'https://www.verus.com');
+    await fill(name, 'https://www.mycompany.com');
 
     expect(submitButton().disabled).toBe(true);
     expect(el('[data-testid="name-error"]')?.textContent).toMatch(/Company name/);
@@ -74,36 +74,36 @@ describe('CompanyFormComponent', () => {
   });
 
   it('submit_ValidForm_CallsServiceWithTrimmedValues', async () => {
-    await fill('  Verus LLC ', ' https://www.verus.com ');
+    await fill('  MyCompany ', ' https://www.mycompany.com ');
     expect(submitButton().disabled).toBe(false);
 
     await submit();
 
     expect(serviceMock.create).toHaveBeenCalledOnce();
-    expect(serviceMock.create).toHaveBeenCalledWith({ name: 'Verus LLC', website: 'https://www.verus.com' });
+    expect(serviceMock.create).toHaveBeenCalledWith({ name: 'MyCompany', website: 'https://www.mycompany.com' });
   });
 
   it('submit_ServerReturns201_ShowsSuccessAndEmitsCreated', async () => {
     const emitted: Company[] = [];
     component.created.subscribe((c) => emitted.push(c));
-    await fill('Verus LLC', 'https://www.verus.com');
+    await fill('MyCompany', 'https://www.mycompany.com');
     await submit();
 
-    const company: Company = { id: 'abc', name: 'Verus LLC', website: 'https://www.verus.com' };
+    const company: Company = { id: 'abc', name: 'MyCompany', website: 'https://www.mycompany.com' };
     response$.next(company);
     response$.complete();
     fixture.detectChanges();
     await fixture.whenStable();
 
-    expect(el('[data-testid="success"]')?.textContent).toContain('Verus LLC');
+    expect(el('[data-testid="success"]')?.textContent).toContain('MyCompany');
     expect(el('[data-testid="error"]')).toBeNull();
     expect(emitted).toEqual([company]);
     expect(component.form.getRawValue()).toEqual({ name: '', website: '' });
   });
 
   it('submit_ServerReturns400_ShowsServerMessage', async () => {
-    const message = "Company name 'Verus LLC' does not appear to be relevant to website 'https://www.google.com'.";
-    await fill('Verus LLC', 'https://www.google.com');
+    const message = "Company name 'MyCompany' does not appear to be relevant to website 'https://www.google.com'.";
+    await fill('MyCompany', 'https://www.google.com');
     await submit();
 
     response$.error(new ApiError(message, 400, [message, 'token overlap 0.00']));
@@ -118,7 +118,7 @@ describe('CompanyFormComponent', () => {
   });
 
   it('submit_UnexpectedError_ShowsFriendlyMessage', async () => {
-    await fill('Verus LLC', 'https://www.verus.com');
+    await fill('MyCompany', 'https://www.mycompany.com');
     await submit();
 
     response$.error(new Error('kaboom'));

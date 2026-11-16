@@ -16,7 +16,7 @@ public sealed class CompaniesApiTests : IDisposable
     private readonly ApiFactory _factory = new();
     private readonly HttpClient _client;
 
-    public CompaniesApiTests() => _client = _factory.CreateClient();
+    public CompaniesApiTests() => _client = _factory.CreateAuthenticatedClient();
 
     public void Dispose()
     {
@@ -29,13 +29,13 @@ public sealed class CompaniesApiTests : IDisposable
     [Fact]
     public async Task Post_ValidCompany_Returns201WithLocationAndBody()
     {
-        var response = await _client.CreateCompanyAsync("Verus LLC", "https://www.verus.com");
+        var response = await _client.CreateCompanyAsync("MyCompany", "https://www.mycompany.com");
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         var body = await response.Content.ReadFromJsonAsync<CompanyResponse>();
         body!.Id.Should().NotBe(Guid.Empty);
-        body.Name.Should().Be("Verus LLC");
-        body.Website.Should().Be("https://www.verus.com");
+        body.Name.Should().Be("MyCompany");
+        body.Website.Should().Be("https://www.mycompany.com");
         response.Headers.Location.Should().NotBeNull();
         response.Headers.Location!.AbsolutePath.Should().BeEquivalentTo($"/api/companies/{body.Id}");
 
@@ -49,7 +49,7 @@ public sealed class CompaniesApiTests : IDisposable
     [InlineData(null)]
     public async Task Post_EmptyName_Returns400MentioningName(string? name)
     {
-        var response = await _client.CreateCompanyAsync(name, "https://www.verus.com");
+        var response = await _client.CreateCompanyAsync(name, "https://www.mycompany.com");
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
@@ -60,7 +60,7 @@ public sealed class CompaniesApiTests : IDisposable
     [Fact]
     public async Task Post_OneCharacterName_Returns400WithMinLengthMessage()
     {
-        var response = await _client.CreateCompanyAsync("V", "https://www.verus.com");
+        var response = await _client.CreateCompanyAsync("V", "https://www.mycompany.com");
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         (await response.Content.ReadFromJsonAsync<ErrorResponse>())!.Message
@@ -69,12 +69,12 @@ public sealed class CompaniesApiTests : IDisposable
 
     [Theory]
     [InlineData("not a url")]
-    [InlineData("verus.com")]
-    [InlineData("ftp://verus.com")]
+    [InlineData("mycompany.com")]
+    [InlineData("ftp://mycompany.com")]
     [InlineData("https://localhost")]
     public async Task Post_InvalidUrl_Returns400MentioningUrl(string website)
     {
-        var response = await _client.CreateCompanyAsync("Verus LLC", website);
+        var response = await _client.CreateCompanyAsync("MyCompany", website);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         (await response.Content.ReadFromJsonAsync<ErrorResponse>())!.Message.Should().Contain("Website URL");
@@ -83,11 +83,11 @@ public sealed class CompaniesApiTests : IDisposable
     [Fact]
     public async Task Post_IrrelevantNameAndUrl_Returns400WithRelevanceMessage()
     {
-        var response = await _client.CreateCompanyAsync("Verus LLC", "https://www.google.com");
+        var response = await _client.CreateCompanyAsync("MyCompany", "https://www.google.com");
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
-        error!.Message.Should().Be("Company name 'Verus LLC' does not appear to be relevant to website 'https://www.google.com'.");
+        error!.Message.Should().Be("Company name 'MyCompany' does not appear to be relevant to website 'https://www.google.com'.");
         error.Errors.Should().Contain(e => e.Contains("token overlap"));
 
         var list = await _client.GetFromJsonAsync<List<CompanySearchResult>>("/api/companies");
@@ -95,7 +95,7 @@ public sealed class CompaniesApiTests : IDisposable
     }
 
     [Theory]
-    [InlineData("{ \"name\": \"Verus\", ")]
+    [InlineData("{ \"name\": \"MyCompany\", ")]
     [InlineData("not json at all")]
     [InlineData("")]
     [InlineData("[]")]
@@ -137,9 +137,9 @@ public sealed class CompaniesApiTests : IDisposable
     {
         await SeedAsync();
 
-        var list = await _client.GetFromJsonAsync<List<CompanySearchResult>>("/api/companies?name=ver");
+        var list = await _client.GetFromJsonAsync<List<CompanySearchResult>>("/api/companies?name=comp");
 
-        list.Should().ContainSingle().Which.Name.Should().Be("Verus LLC");
+        list.Should().ContainSingle().Which.Name.Should().Be("MyCompany");
     }
 
     [Fact]
@@ -147,9 +147,9 @@ public sealed class CompaniesApiTests : IDisposable
     {
         await SeedAsync();
 
-        var list = await _client.GetFromJsonAsync<List<CompanySearchResult>>("/api/companies?domain=verus.com");
+        var list = await _client.GetFromJsonAsync<List<CompanySearchResult>>("/api/companies?domain=mycompany.com");
 
-        list.Should().ContainSingle().Which.Website.Should().Be("https://www.verus.com");
+        list.Should().ContainSingle().Which.Website.Should().Be("https://www.mycompany.com");
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public sealed class CompaniesApiTests : IDisposable
         list.Should().NotBeEmpty();
         list!.Select(c => c.Score).Should().OnlyContain(s => s != null).And.BeInDescendingOrder();
         list[0].Name.Should().Be("Acme");
-        list.Should().NotContain(c => c.Name == "Verus LLC");
+        list.Should().NotContain(c => c.Name == "MyCompany");
     }
 
     [Theory]
@@ -210,7 +210,7 @@ public sealed class CompaniesApiTests : IDisposable
     [Fact]
     public async Task GetById_Existing_Returns200()
     {
-        var created = await (await _client.CreateCompanyAsync("Verus LLC", "https://www.verus.com"))
+        var created = await (await _client.CreateCompanyAsync("MyCompany", "https://www.mycompany.com"))
             .Content.ReadFromJsonAsync<CompanyResponse>();
 
         var response = await _client.GetAsync($"/api/companies/{created!.Id}");
@@ -242,7 +242,7 @@ public sealed class CompaniesApiTests : IDisposable
     [Fact]
     public async Task Responses_NeverContainInternalOnlyFields()
     {
-        var post = await _client.CreateCompanyAsync("Verus LLC", "https://www.verus.com");
+        var post = await _client.CreateCompanyAsync("MyCompany", "https://www.mycompany.com");
         var id = (await post.Content.ReadFromJsonAsync<CompanyResponse>())!.Id;
 
         var bodies = new[]
@@ -268,7 +268,7 @@ public sealed class CompaniesApiTests : IDisposable
             services.RemoveAll<ICompanyRepository>();
             services.AddSingleton<ICompanyRepository, ThrowingRepository>();
         });
-        using var client = factory.CreateClient();
+        using var client = factory.CreateAuthenticatedClient();
 
         var response = await client.GetAsync("/api/companies");
 
@@ -281,7 +281,7 @@ public sealed class CompaniesApiTests : IDisposable
 
     private async Task SeedAsync()
     {
-        (await _client.CreateCompanyAsync("Verus LLC", "https://www.verus.com")).EnsureSuccessStatusCode();
+        (await _client.CreateCompanyAsync("MyCompany", "https://www.mycompany.com")).EnsureSuccessStatusCode();
         (await _client.CreateCompanyAsync("Acme Tools Inc.", "https://acmetools.com")).EnsureSuccessStatusCode();
     }
 

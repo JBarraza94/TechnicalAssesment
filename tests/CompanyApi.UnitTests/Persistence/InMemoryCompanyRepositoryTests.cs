@@ -7,8 +7,8 @@ public sealed class InMemoryCompanyRepositoryTests
 {
     private readonly InMemoryCompanyRepository _sut = new();
 
-    private static Company NewCompany(string name = "Verus LLC") =>
-        new(Guid.NewGuid(), name, "https://www.verus.com", "verus.com", DateTimeOffset.UtcNow);
+    private static Company NewCompany(string name = "MyCompany") =>
+        new(Guid.NewGuid(), name, "https://www.mycompany.com", "mycompany.com", DateTimeOffset.UtcNow);
 
     [Fact]
     public async Task AddAsync_ThenGetById_ReturnsSameCompany()
@@ -107,8 +107,8 @@ public sealed class InMemoryCompanyRepositoryTests
         var company = NewCompany();
         await _sut.AddAsync(company);
 
-        (await _sut.UpdateAsync(company with { Name = "Verus Inc" })).Should().BeTrue();
-        (await _sut.GetByIdAsync(company.Id))!.Name.Should().Be("Verus Inc");
+        (await _sut.UpdateAsync(company with { Name = "MyCompany Inc" })).Should().BeTrue();
+        (await _sut.GetByIdAsync(company.Id))!.Name.Should().Be("MyCompany Inc");
         (await _sut.UpdateAsync(NewCompany())).Should().BeFalse();
     }
 

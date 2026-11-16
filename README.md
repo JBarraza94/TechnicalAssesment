@@ -42,6 +42,26 @@ npm install
 npx ng serve          # or: npm start
 ```
 
+Sign in with the demo user **`admin` / `Admin123!`** (defined in `appsettings.Development.json`).
+
+The app has a sidebar and four lazy-loaded routes (`src/app/app.routes.ts`):
+
+| Route | Access | Page | Contents |
+|---|---|---|---|
+| `/login` | signed-out only | `LoginPage` | Sign-in form; returns you to the page you asked for |
+| `/add` (default; `/` and unknown paths redirect here) | signed in | `AddCompanyPage` | Create form + a **Search company** button that goes to `/search` |
+| `/search` | signed in | `SearchCompaniesPage` | Debounced search, refresh and results table + an **Add company** button that goes to `/add` |
+| `/docs` | public | `DocumentationPage` | API reference: endpoints (curl example and every response per endpoint), payloads, validation rules with their exact messages, and the relevance model (steps, weights, threshold, examples) |
+
+**Responsive layout.** Above 768px the sidebar is fixed on the left, with the signed-in user and a **Log out** button at the bottom. At 768px and below it becomes a top bar with a menu button; the menu closes after each navigation. At 640px and below, search results show as stacked cards instead of a table, and form buttons span the full width.
+
+## Authentication
+
+- **API:** JWT bearer tokens signed with HMAC-SHA256 (`Auth:SigningKey`, 60-minute lifetime). Users come from `Auth:Users`; passwords are stored as PBKDF2-SHA256 hashes (100,000 iterations) and compared in constant time. Unknown users and wrong passwords get the same answer, and sign-in is limited to 10 attempts per minute per IP address (429 afterwards).
+- **Frontend:** `AuthService` keeps the session in `sessionStorage`, so it survives a reload but ends when the tab closes. An HTTP interceptor adds the token only to requests for the API base URL. If the API answers 401 (e.g. the token expired), the interceptor signs the user out and sends them to `/login?reason=expired`. Route guards protect `/add` and `/search`, and the post-login redirect accepts only paths inside the app.
+- **Configuration:** the signing key and the demo user are only in `appsettings.Development.json`. In any other environment the API refuses to start without `Auth:SigningKey` (at least 32 characters); provide it and the users through user secrets or environment variables (`Auth__SigningKey`, `Auth__Users__0__Username`, `Auth__Users__0__PasswordHash`). To hash a new password, call `PasswordHasher.Hash("…")` in `src/CompanyApi.Api/Auth/PasswordHasher.cs`.
+- **Limits of this simple layer:** users live in configuration (no registration, roles or password reset), there are no refresh tokens (sign in again after 60 minutes), and a token cannot be revoked before it expires. A real deployment would use an identity provider (OIDC) or ASP.NET Core Identity with a database.
+
 The API base URL is set in `src/environments/environment.ts` (`http://localhost:5000/api`) and injected through the `API_BASE_URL` token. The backend enables CORS for `http://localhost:4200` (configurable under `Cors:AllowedOrigins`).
 
 ## Test
@@ -57,9 +77,13 @@ Angular 22's default test runner is Vitest with jsdom, run by `ng test`. Its API
 
 | Method | Route | Success | Errors |
 |---|---|---|---|
+| POST | `/api/auth/login` (public) | 200 `LoginResponse` (bearer token) | 400 missing fields, 401 wrong credentials, 429 more than 10 attempts/min |
+| GET | `/api/auth/me` | 200 `{ "username": … }` | 401 |
 | POST | `/api/companies` | 201 + `Location` + `CompanyResponse` | 400 validation / relevance / malformed body |
 | GET | `/api/companies?name=&domain=&q=&page=&pageSize=` | 200 array (possibly `[]`) | 400 invalid query |
 | GET | `/api/companies/{id}` | 200 `CompanyResponse` | 404 unknown id, **400 when `{id}` is not a GUID** |
+
+All `/api/companies` endpoints and `/api/auth/me` require `Authorization: Bearer <token>`. A missing, invalid or expired token returns **401** with an `ErrorResponse`.
 
 - `name` matches any part of the company name, ignoring case and accents.
 - `domain` matches the website host and ignores `www.`. It also accepts subdomains and full URLs.
@@ -77,43 +101,60 @@ Unexpected exceptions return **500** with `{"message":"An unexpected error occur
 ### curl examples
 
 ```bash
-B=http://localhost:5000/api/companies
+API=http://localhost:5000/api
+B=$API/companies
+
+# Sign in (demo user in appsettings.Development.json) and keep the token
+curl -X POST $API/auth/login -H "Content-Type: application/json" -d '{"username":"admin","password":"Admin123!"}'
+# {"accessToken":"eyJhbGciOi…","tokenType":"Bearer","expiresAt":"2026-11-14T02:35:46+00:00","username":"admin"}
+TOKEN=$(curl -s -X POST $API/auth/login -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"Admin123!"}' | sed -E 's/.*"accessToken":"([^"]+)".*/\1/')
+AUTH="Authorization: Bearer $TOKEN"
+
+# Sign in: wrong password (401), no token (401)
+curl -X POST $API/auth/login -H "Content-Type: application/json" -d '{"username":"admin","password":"nope"}'
+# {"message":"Invalid username or password.", ...}
+curl $B
+# {"message":"Authentication is required. Sign in and send the token as 'Authorization: Bearer {token}'.", ...}
+
+# Current user
+curl -H "$AUTH" $API/auth/me    # {"username":"admin"}
 
 # POST: success (201 + Location)
-curl -i -X POST $B -H "Content-Type: application/json" -d '{"name":"Verus LLC","website":"https://www.verus.com"}'
+curl -H "$AUTH" -i -X POST $B -H "Content-Type: application/json" -d '{"name":"MyCompany","website":"https://www.mycompany.com"}'
 # HTTP/1.1 201 Created
 # Location: http://localhost:5000/api/companies/5f8aa2db-5162-482b-a0ad-19b3f5d98456
-# {"id":"5f8aa2db-5162-482b-a0ad-19b3f5d98456","name":"Verus LLC","website":"https://www.verus.com"}
+# {"id":"5f8aa2db-5162-482b-a0ad-19b3f5d98456","name":"MyCompany","website":"https://www.mycompany.com"}
 
 # POST: validation errors (400)
-curl -X POST $B -H "Content-Type: application/json" -d '{"name":"","website":"https://www.verus.com"}'
+curl -H "$AUTH" -X POST $B -H "Content-Type: application/json" -d '{"name":"","website":"https://www.mycompany.com"}'
 # {"message":"Company name is required.","errors":["Company name is required."]}
-curl -X POST $B -H "Content-Type: application/json" -d '{"name":"Verus","website":"ftp://verus.com"}'
+curl -H "$AUTH" -X POST $B -H "Content-Type: application/json" -d '{"name":"MyCompany","website":"ftp://mycompany.com"}'
 # {"message":"Website URL scheme must be http or https.", ...}
 
 # POST: irrelevant name/website pair (400, with the explanation)
-curl -X POST $B -H "Content-Type: application/json" -d '{"name":"Verus LLC","website":"https://www.google.com"}'
-# {"message":"Company name 'Verus LLC' does not appear to be relevant to website 'https://www.google.com'.",
-#  "errors":[..., "Name tokens [verus] vs domain 'google': domain match 0.00, token overlap 0.00, fuzzy similarity 0.00 -> offline score 0.00."]}
+curl -H "$AUTH" -X POST $B -H "Content-Type: application/json" -d '{"name":"MyCompany","website":"https://www.google.com"}'
+# {"message":"Company name 'MyCompany' does not appear to be relevant to website 'https://www.google.com'.",
+#  "errors":[..., "Name tokens [mycompany] vs domain 'google': domain match 0.00, token overlap 0.00, fuzzy similarity 0.43 -> offline score 0.17."]}
 
 # POST: malformed JSON (400)
-curl -X POST $B -H "Content-Type: application/json" -d '{"name": "Verus",'
+curl -H "$AUTH" -X POST $B -H "Content-Type: application/json" -d '{"name": "MyCompany",'
 # {"message":"The request body is empty or is not valid JSON.", ...}
 
 # GET list: success, filters, relevance search
-curl $B                      # [] when empty, otherwise every company
-curl "$B?name=ver"           # [{"id":"…","name":"Verus LLC","website":"https://www.verus.com"}]
-curl "$B?domain=verus.com"   # same
-curl "$B?q=acme"             # [{"id":"…","name":"Acme Tools Inc.","website":"https://acmetools.com","score":0.7889,"explanation":"…"}]
-curl "$B?name=zzz"           # []
+curl -H "$AUTH" $B           # [] when empty, otherwise every company
+curl -H "$AUTH" "$B?name=comp"           # [{"id":"…","name":"MyCompany","website":"https://www.mycompany.com"}]
+curl -H "$AUTH" "$B?domain=mycompany.com"   # same
+curl -H "$AUTH" "$B?q=acme"             # [{"id":"…","name":"Acme Tools Inc.","website":"https://acmetools.com","score":0.7889,"explanation":"…"}]
+curl -H "$AUTH" "$B?name=zzz"           # []
 
 # GET list: invalid query (400)
-curl "$B?pageSize=0"         # {"message":"pageSize must be between 1 and 100.", ...}
+curl -H "$AUTH" "$B?pageSize=0"         # {"message":"pageSize must be between 1 and 100.", ...}
 
 # GET by id: success, not found, bad format
-curl $B/5f8aa2db-5162-482b-a0ad-19b3f5d98456                  # 200
-curl $B/00000000-0000-0000-0000-000000000001                  # 404 {"message":"Company '…' was not found.", ...}
-curl $B/not-a-guid                                            # 400 {"message":"'not-a-guid' is not a valid company id (expected a GUID).", ...}
+curl -H "$AUTH" $B/5f8aa2db-5162-482b-a0ad-19b3f5d98456       # 200
+curl -H "$AUTH" $B/00000000-0000-0000-0000-000000000001       # 404 {"message":"Company '…' was not found.", ...}
+curl -H "$AUTH" $B/not-a-guid                                 # 400 {"message":"'not-a-guid' is not a valid company id (expected a GUID).", ...}
 ```
 
 ## Validation rules
@@ -129,7 +170,7 @@ Both server rules and client rules apply. `CompanyInputValidator` is the authori
 The strategy is `IRelevanceStrategy` → `CompositeRelevanceStrategy`. It returns `RelevanceResult(Score, Explanation)`, where the score is in [0, 1]. It is deterministic and works offline by default.
 
 1. **Normalize** (`TextNormalizer`). Names are lowercased and stripped of accents and punctuation (`S.A.` → `sa`, `AT&T` → `att`). Then trailing legal suffixes are removed (`inc, llc, ltd, corp, co, gmbh, sa, s.a. de c.v., plc, ag, …`) and the rest is split into tokens. A suffix is never removed if it is the whole name. Hosts lose `www.` and the TLD, and country second levels such as `.co.uk` and `.com.mx` are handled. The remaining label (e.g. `acme-tools`) is split on hyphens.
-2. **Domain match**: 1.0 when the concatenated name tokens equal the domain label (`Verus LLC` → `verus` = `verus.com`). An acronym of a multi-word name also counts (`International Business Machines` → `ibm`). A domain match short-circuits the score to **1.0**.
+2. **Domain match**: 1.0 when the concatenated name tokens equal the domain label (`MyCompany` → `mycompany` = `mycompany.com`). An acronym of a multi-word name also counts (`International Business Machines` → `ibm`). A domain match short-circuits the score to **1.0**.
 3. **Token overlap**: the average of two values:
    - *containment*: the share of name tokens found in the label. Exact tokens and substrings count (`acmetools` contains `acme`), and so do near-matches with Jaro-Winkler ≥ 0.88.
    - *coverage*: the share of the label explained by the matched tokens.
@@ -141,11 +182,11 @@ The **same model ranks `q` searches**: `ScoreQuery` scores the query tokens agai
 
 | Example | Score |
 |---|---|
-| Verus LLC / www.verus.com | 1.00 (domain match) |
+| MyCompany / www.mycompany.com | 1.00 (domain match) |
 | Acme Tools Inc. / acmetools.com | 1.00 (concatenated tokens = label) |
 | Café Niño S.A. de C.V. / cafenino.com.mx | 1.00 |
 | Microsft / microsoft.com | 0.96 |
-| Verus LLC / google.com | 0.00 → rejected |
+| MyCompany / google.com | 0.17 → rejected |
 | Banana Co / microsoft.com | 0.00 → rejected |
 
 **Trade-offs.**
@@ -176,7 +217,9 @@ The **same model ranks `q` searches**: `ScoreQuery` scores the query tokens agai
 
 - **.NET 10** is used because it is the current LTS; .NET 8 left support on 2026-11-10.
 - **Angular 22** is used, with its default test runner (Vitest), instead of Karma.
-- The website is stored exactly as entered (trimmed), so `https://www.verus.com` doesn't come back as `https://www.verus.com/`.
+- The website is stored exactly as entered (trimmed), so `https://www.mycompany.com` doesn't come back as `https://www.mycompany.com/`.
 - The default `GET /api/companies` order is by name. `q` results are ordered by score.
 - HTTPS redirection is off, so the Angular dev server and curl can use `http://localhost:5000` without a certificate prompt.
 - FluentAssertions is pinned to 7.x, the last Apache-2.0 release; 8.x needs a commercial license.
+#   T e c h n i c a l A s s e s m e n t  
+ 

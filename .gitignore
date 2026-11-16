@@ -1,0 +1,8 @@
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+frontend/company-app/node_modules/
+frontend/company-app/dist/
+frontend/company-app/.angular/
